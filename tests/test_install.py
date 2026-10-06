@@ -2,6 +2,7 @@
 
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -30,9 +31,10 @@ class InstallTest(unittest.TestCase):
                 self.assertEqual(list(project.iterdir()), [])
                 skill = home / ".agents/skills/showwork/SKILL.md"
                 skill.write_text("My customized skill")
-                with self.assertRaisesRegex(ValueError, "Existing install differs"):
-                    INSTALLER.install()
-                self.assertEqual(skill.read_text(), "My customized skill")
+                self.assertEqual(INSTALLER.install(), 1)
+                backups = list((home / ".agents/showwork-backups").glob("update-*/showwork/SKILL.md"))
+                self.assertEqual(backups[-1].read_text(), "My customized skill")
+                self.assertEqual(skill.read_bytes(), (ROOT / "skills/showwork/SKILL.md").read_bytes())
                 self.assertEqual(instructions.read_bytes(), before)
 
     def test_user_install_respects_custom_codex_home_and_override(self):
@@ -164,19 +166,20 @@ class InstallTest(unittest.TestCase):
 
             custom = skills / "showwork" / "personal-notes.md"
             custom.write_text("Keep this", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Existing install differs"):
-                INSTALLER.install(project)
-            self.assertEqual(custom.read_text(encoding="utf-8"), "Keep this")
+            self.assertEqual(INSTALLER.install(project), 1)
+            backups = list((project / ".agents/showwork-backups").glob("update-*/showwork/personal-notes.md"))
+            self.assertEqual(backups[-1].read_text(encoding="utf-8"), "Keep this")
+            self.assertFalse(custom.exists())
 
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
             existing = project / ".agents" / "skills" / "showwork-verify"
             existing.mkdir(parents=True)
             (existing / "SKILL.md").write_text("User version", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Existing install differs"):
-                INSTALLER.install(project)
-            self.assertFalse((existing.parent / "showwork").exists())
-            self.assertFalse((project / "AGENTS.md").exists())
+            self.assertEqual(INSTALLER.install(project), 4)
+            backups = list((project / ".agents/showwork-backups").glob("update-*/showwork-verify/SKILL.md"))
+            self.assertEqual(backups[-1].read_text(), "User version")
+            self.assertTrue((project / "AGENTS.md").exists())
 
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"
@@ -187,6 +190,83 @@ class InstallTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Expected a real directory"):
                 INSTALLER.install(project)
             self.assertEqual(list(external.iterdir()), [])
+
+    def test_upgrade_replaces_changed_files_removes_retired_files_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            source = Path(temporary) / "release"
+            shutil.copytree(ROOT / "skills", source)
+            retired = source / "showwork/retired.md"
+            retired.write_text("Old release file")
+            INSTALLER.install(project, source)
+            retired.unlink()
+            (source / "showwork/SKILL.md").write_text("New release")
+            self.assertEqual(INSTALLER.install(project, source), 1)
+            installed = project / ".agents/skills/showwork"
+            self.assertEqual((installed / "SKILL.md").read_text(), "New release")
+            self.assertFalse((installed / "retired.md").exists())
+            backups = list((project / ".agents/showwork-backups").iterdir())
+            self.assertEqual((backups[0] / "showwork/retired.md").read_text(), "Old release file")
+            self.assertEqual(INSTALLER.install(project, source), 0)
+            self.assertEqual(list((project / ".agents/showwork-backups").iterdir()), backups)
+
+    def test_failed_update_restores_all_skills_and_instructions(self):
+        for failure in ("replace", "move_after", "instructions", "instructions_after", "staging"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                project = Path(temporary) / "project"
+                project.mkdir()
+                INSTALLER.install(project)
+                skills = project / ".agents/skills"
+                before = INSTALLER.contents(skills)
+                instructions = project / "AGENTS.md"
+                instructions.write_text("User prefix\n" + INSTALLER.START + "\nOld instructions\n" + INSTALLER.END)
+                original = instructions.read_bytes()
+                source = Path(temporary) / "release"
+                shutil.copytree(ROOT / "skills", source)
+                for name in INSTALLER.SKILLS:
+                    (source / name / "SKILL.md").write_text("New release")
+                replace = INSTALLER.os.replace
+                write_instructions = INSTALLER.write_instructions
+                def fail_replace(src, dest):
+                    if failure == "replace" and ".showwork-stage-" in str(src) and Path(src).name == "showwork-review":
+                        raise OSError("Simulated failure")
+                    result = replace(src, dest)
+                    if failure == "move_after" and Path(src) == skills / "showwork-review":
+                        raise KeyboardInterrupt("Simulated failure")
+                    return result
+                def fail_instructions(path, content):
+                    write_instructions(path, content)
+                    raise KeyboardInterrupt("Simulated failure")
+                if failure in ("replace", "move_after"):
+                    mock = patch.object(INSTALLER.os, "replace", side_effect=fail_replace)
+                elif failure == "instructions":
+                    mock = patch.object(INSTALLER, "write_instructions", side_effect=OSError("Simulated failure"))
+                elif failure == "instructions_after":
+                    mock = patch.object(INSTALLER, "write_instructions", side_effect=fail_instructions)
+                else:
+                    mock = patch.object(INSTALLER.shutil, "copytree", side_effect=OSError("Simulated failure"))
+                with mock, self.assertRaisesRegex((OSError, KeyboardInterrupt), "Simulated failure"):
+                    INSTALLER.install(project, source)
+                self.assertEqual(INSTALLER.contents(skills), before)
+                self.assertEqual(instructions.read_bytes(), original)
+                self.assertFalse((project / ".agents/.showwork-install.lock").exists())
+
+    def test_update_refuses_existing_lock_and_symlinked_backup_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            INSTALLER.install(project)
+            skill = project / ".agents/skills/showwork/SKILL.md"
+            skill.write_text("Local edits")
+            lock = project / ".agents/.showwork-install.lock"
+            lock.mkdir()
+            with self.assertRaisesRegex(ValueError, "Another install is active"):
+                INSTALLER.install(project)
+            lock.rmdir()
+            (project / ".agents/showwork-backups").symlink_to(project, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "Expected a real backup directory"):
+                INSTALLER.install(project)
+            self.assertEqual(skill.read_text(), "Local edits")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ try {
   }
   if (values.user && values.target !== undefined) throw new Error('Use either --user or --target, not both.');
   if (values.help) {
-    console.log('Usage: showwork [install] [--user | --target <project>]\n\nInstalls for the current user by default: ~/.agents/skills and $CODEX_HOME/AGENTS.md\n(CODEX_HOME defaults to ~/.codex; an active AGENTS.override.md takes precedence).\nUse --target for a project-only install. Requires Python 3.11+.\nExisting modified skills are never overwritten.');
+    console.log('Usage: showwork [install] [--user | --target <project>]\n\nInstalls or updates for the current user: ~/.agents/skills and $CODEX_HOME/AGENTS.md\n(CODEX_HOME defaults to ~/.codex; an active AGENTS.override.md takes precedence).\nUse --target for a project-only install. Requires Python 3.11+.\nChanged skills, including local edits, are backed up before replacement.\nRerun npx --yes github:cwsbrian/showwork to update from GitHub.');
   } else if (values.version) {
     console.log(require('../package.json').version);
   } else {

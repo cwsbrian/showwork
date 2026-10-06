@@ -2,6 +2,7 @@
 """Install Showwork for the current user, or an explicitly selected project."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -85,6 +86,7 @@ def install(target=None, source=SOURCE):
     )
 
     pending = []
+    previous = {}
     for name in SKILLS:
         bundled = source / name
         expected = contents(bundled)
@@ -92,25 +94,81 @@ def install(target=None, source=SOURCE):
             raise ValueError(f"Missing SKILL.md: {bundled}")
         installed = destination / name
         if installed.exists() or installed.is_symlink():
-            if contents(installed) != expected:
-                raise ValueError(
-                    f"Existing install differs: {installed}. "
-                    "Back up or move the four Showwork skill directories before reinstalling. "
-                    "No existing files were changed."
-                )
+            previous[name] = contents(installed)
+            if previous[name] != expected:
+                pending.append(name)
         else:
+            previous[name] = None
             pending.append(name)
 
     instruction_directory.mkdir(parents=True, exist_ok=True)
-    if pending:
-        destination.mkdir(parents=True, exist_ok=True)
-        for name in pending:
-            # copytree refuses an existing target; it never merges user files.
-            shutil.copytree(source / name, destination / name,
-                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
-    if before != after:
-        write_instructions(instruction_path, after)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    lock = destination.parent / ".showwork-install.lock"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        raise ValueError(f"Another install is active. If it was interrupted, remove {lock} and retry.") from None
+    try:
+        # Preflight ran before taking the lock: reject any intervening changes.
+        for name, snapshot in previous.items():
+            installed = destination / name
+            current = contents(installed) if installed.exists() or installed.is_symlink() else None
+            if current != snapshot:
+                raise ValueError(f"Files changed during installation: {installed}; retry.")
+        if project_instructions(instruction_directory, destination.as_posix() if user_install else ".agents/skills")[1] != before:
+            raise ValueError("Instructions changed during installation; retry.")
+        apply_update(destination, source, pending, previous, instruction_path, before, after)
+    finally:
+        lock.rmdir()
     return len(pending)
+
+
+def apply_update(destination, source, pending, previous, instruction_path, before, after):
+    """Stage first, retain old files outside skill discovery, roll back failed writes."""
+    backup = None
+    applied = []
+    instruction_existed = instruction_path.exists()
+    instruction_write_started = False
+    with tempfile.TemporaryDirectory(prefix=".showwork-stage-", dir=destination.parent) as temporary:
+        staged = Path(temporary)
+        for name in pending:
+            shutil.copytree(source / name, staged / name,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
+        if any(previous[name] is not None for name in pending) or (instruction_existed and before != after):
+            backup_root = destination.parent / "showwork-backups"
+            if backup_root.is_symlink() or (backup_root.exists() and not backup_root.is_dir()):
+                raise ValueError(f"Expected a real backup directory: {backup_root}")
+            backup_root.mkdir(exist_ok=True)
+            backup = Path(tempfile.mkdtemp(prefix="update-", dir=backup_root))
+            if before != after and instruction_path.exists():
+                shutil.copy2(instruction_path, backup / instruction_path.name)
+            print(f"Previous files (including local edits) are backed up in: {backup}")
+        destination.mkdir(exist_ok=True)
+        try:
+            for name in pending:
+                applied.append(name)
+                if previous[name] is not None:
+                    os.replace(destination / name, backup / name)
+                os.replace(staged / name, destination / name)
+            if before != after:
+                instruction_write_started = True
+                write_instructions(instruction_path, after)
+        except BaseException:
+            for name in reversed(applied):
+                installed = destination / name
+                if previous[name] is not None:
+                    if (backup / name).exists():
+                        if installed.exists():
+                            shutil.rmtree(installed)
+                        os.replace(backup / name, installed)
+                elif installed.exists():
+                    shutil.rmtree(installed)
+            if instruction_write_started:
+                if instruction_existed:
+                    os.replace(backup / instruction_path.name, instruction_path)
+                else:
+                    instruction_path.unlink(missing_ok=True)
+            raise
 
 
 def main():
@@ -124,7 +182,8 @@ def main():
     except (OSError, ValueError) as error:
         parser.exit(1, f"showwork: {error}\n")
     scope_name = "project" if args.target is not None else "user"
-    print(f"Copied {count} Showwork skills; automatic routing is configured in {scope_name} instructions.")
+    version = json.loads((SOURCE.parent / "package.json").read_text(encoding="utf-8"))["version"]
+    print(f"Showwork {version}: installed/updated {count} skills; automatic routing is configured in {scope_name} instructions.")
     print("Start a new Codex session and describe your task normally.")
 
 

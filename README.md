@@ -47,6 +47,8 @@ npx --yes github:cwsbrian/showwork
 
 프로젝트 하나에만 설치하려면 `npx --yes github:cwsbrian/showwork install --target /absolute/path/to/your-project`를 사용하세요. 기본 사용자 설치는 현재 프로젝트 파일을 수정하지 않습니다.
 
+**업데이트도 같은 명령을 다시 실행하면 됩니다.** GitHub의 최신 기본 브랜치를 가져오며, 바뀐 스킬은 `~/.agents/showwork-backups/`에 이전 내용을 보관한 뒤 교체합니다. 업데이트 후 새 Codex 채팅을 여세요.
+
 이 명령은 GitHub에서 직접 가져옵니다. npm 레지스트리에는 아직 게시하지 않았으므로 `npx showwork`는 사용하지 마세요. Claude Code 플러그인은 아래 방법으로 불러옵니다.
 
 ### Claude Code
@@ -102,7 +104,7 @@ $showwork-review 현재 변경사항을 리뷰해줘
 $showwork-verify 구현한 구독 취소 기능을 검증해줘
 ```
 
-설치기는 `~/.agents/skills`에 네 스킬을 복사합니다. 같은 내용은 그대로 두고, 기존 스킬 내용이 다르면 덮어쓰지 않고 멈춥니다. 지침에서는 Showwork가 관리하는 블록만 갱신하며 다른 내용을 보존합니다. 네이티브 플러그인 매니페스트도 포함되어 있습니다. 이전 프로젝트 설치는 자동 삭제하지 않습니다. 중복 설치 정리와 업데이트 방법은 [설치 안내](docs/installation.md)를 참고하세요.
+설치기는 `~/.agents/skills`에 네 스킬을 복사합니다. 같은 내용은 그대로 두고, 달라진 스킬은 기존 파일을 백업한 뒤 최신 내용으로 교체합니다. 직접 수정한 내용도 백업에 남습니다. 지침에서는 Showwork가 관리하는 블록만 갱신하며 다른 내용을 보존합니다. 네이티브 플러그인 매니페스트도 포함되어 있습니다. 이전 프로젝트 설치는 자동 삭제하지 않습니다. 중복 설치 정리와 업데이트 방법은 [설치 안내](docs/installation.md)를 참고하세요.
 
 ## 요청에 맞는 모드
 
