@@ -1,6 +1,27 @@
 # Showwork 설치
 
-Showwork 0.2.0은 일반 개발 요청에 자동으로 적용되도록 연결합니다. Codex는 프로젝트 지침, Claude Code는 요청 훅을 통해 같은 자동 판단 규칙과 `skills/`를 읽습니다. Python 3.11 이상이 필요합니다. 시각적 선택과 완료 설명을 위한 로컬 브라우저 서버가 스킬에 포함됩니다. 외부 서비스나 MCP는 필요하지 않습니다. 자동 적용 지침을 제공하며, 모델의 모든 행동이나 검증 성공을 강제하는 장치는 아닙니다.
+Showwork 0.2.1은 일반 개발 요청에 자동으로 적용되도록 연결합니다. Codex는 프로젝트 지침, Claude Code는 요청 훅을 통해 같은 자동 판단 규칙과 `skills/`를 읽습니다. Python 3.11 이상이 필요합니다. 시각적 선택과 완료 설명을 위한 로컬 브라우저 서버가 스킬에 포함됩니다. 외부 서비스나 MCP는 필요하지 않습니다. 자동 적용 지침을 제공하며, 모델의 모든 행동이나 검증 성공을 강제하는 장치는 아닙니다.
+
+## Codex: npx로 설치
+
+Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상을 준비하고 **설치할 프로젝트 폴더**에서 실행합니다. 저장소를 따로 내려받을 필요는 없습니다.
+
+```bash
+npx --yes github:cwsbrian/showwork
+```
+
+다른 프로젝트를 지정하거나 도움말을 볼 수도 있습니다.
+
+```bash
+npx --yes github:cwsbrian/showwork install --target /absolute/path/to/your-project
+npx --yes github:cwsbrian/showwork --help
+```
+
+npx가 GitHub 패키지를 캐시에 내려받고, CLI는 기존 Python 설치기를 실행합니다. 기본 설치 대상은 명령을 실행한 폴더입니다. 프로젝트에 npm 의존성을 추가하거나 전역 설정을 바꾸지 않습니다. Python을 찾지 못하면 설치 전에 안내하고 종료합니다. 설치 후 대상 프로젝트에서 새 Codex 채팅을 여세요.
+
+현재는 GitHub 직접 설치만 제공합니다. npm 레지스트리에 게시하지 않았으므로 `npx showwork`는 이 프로젝트의 설치 명령이 아닙니다. `package.json`의 `private`는 실수로 npm에 게시하는 것을 막는 설정이며 GitHub 공개 여부와는 별개입니다. 이 CLI는 Codex 프로젝트 설치용이며 Claude Code에는 아래 플러그인 로딩 방법을 사용합니다.
+
+기존 스킬 내용이 다르면 덮어쓰지 않고 멈춥니다. 아래의 업데이트·제거 안내는 npx 설치에도 동일하게 적용됩니다.
 
 ## Claude Code: 로컬 플러그인
 
@@ -102,9 +123,10 @@ Showwork 저장소에서 실행합니다.
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_install.py'
+npm test
 claude plugin validate . --strict
 ```
 
-첫 명령은 임시 폴더에서 설치, 재실행, 충돌 시 보존, 심볼릭 링크 거부를 확인합니다. 두 번째는 Claude 플러그인 매니페스트를 검사합니다. 매니페스트 통과는 모델이 실제 작업에서 지시를 잘 따른다는 보장은 아닙니다.
+Python 테스트는 임시 폴더에서 설치, 재실행, 충돌 시 보존, 심볼릭 링크 거부를 확인합니다. `npm test`는 실제 npm 배포 파일을 만들어 캐시에서 실행하고 기본 경로·공백 경로 설치, 재실행, 사용자 변경 보존, Python 누락 안내를 확인합니다. 마지막 명령은 Claude 플러그인 매니페스트를 검사합니다. 매니페스트 통과는 모델이 실제 작업에서 지시를 잘 따른다는 보장은 아닙니다.
 
 형식 참고: [Claude 매니페스트 및 경로 변수](https://code.claude.com/docs/en/plugins-reference), [Claude 스킬과 명령 인자](https://code.claude.com/docs/en/skills).

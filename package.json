@@ -1,0 +1,19 @@
+{
+  "name": "showwork",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Install Showwork skills and automatic routing for Codex.",
+  "repository": "github:cwsbrian/showwork",
+  "bin": { "showwork": "scripts/cli.cjs" },
+  "engines": { "node": ">=20" },
+  "files": [
+    "scripts/cli.cjs",
+    "scripts/install_codex.py",
+    "instructions/automatic.md",
+    "skills/*/SKILL.md",
+    "skills/*/references/*.md",
+    "skills/*/scripts/*.py",
+    "skills/*/assets/*.html"
+  ],
+  "scripts": { "test": "node --test tests/install_cli.cjs" }
+}

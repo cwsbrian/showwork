@@ -35,16 +35,25 @@ flowchart LR
 
 ## 시작하기
 
-별도 서비스나 API 키가 필요하지 않습니다. 사용하는 코딩 에이전트의 기존 인증과 도구를 사용합니다. 시각적 선택과 완료 설명에는 함께 제공되는 Python 로컬 브라우저 서버를 사용합니다. 아래 경로를 실제 Showwork와 대상 프로젝트의 경로로 바꾸세요.
+별도 서비스나 API 키가 필요하지 않습니다. 사용하는 코딩 에이전트의 기존 인증과 도구를 사용합니다. Python 3.11 이상이 필요합니다.
 
-먼저 저장소를 내려받습니다.
+**Codex는 대상 프로젝트 폴더에서 한 줄로 설치합니다.** Node.js 20 이상(npm/npx 포함)과 Git이 필요합니다.
+
+```bash
+npx --yes github:cwsbrian/showwork
+```
+
+설치 후 해당 프로젝트에서 **새 Codex 채팅**을 열고 평소처럼 요청하세요. 현재 폴더의 `.agents/skills`와 프로젝트 지침에 설치되며 기존 사용자 내용을 보존합니다. 다른 폴더에 설치하려면 `npx --yes github:cwsbrian/showwork install --target /absolute/path/to/your-project`를 사용하세요.
+
+이 명령은 GitHub에서 직접 가져옵니다. npm 레지스트리에는 아직 게시하지 않았으므로 `npx showwork`는 사용하지 마세요. Claude Code 플러그인은 아래 방법으로 불러옵니다.
+
+### Claude Code
+
+먼저 저장소를 내려받고, 경로를 실제 위치로 바꾸세요.
 
 ```bash
 git clone https://github.com/cwsbrian/showwork.git
-cd showwork
 ```
-
-### Claude Code
 
 ```bash
 cd /absolute/path/to/your-project
@@ -68,7 +77,7 @@ claude --plugin-dir /absolute/path/to/showwork
 
 ### Codex
 
-Python 3.11 이상으로 공통 스킬을 대상 프로젝트에 설치합니다.
+npx 대신 저장소를 내려받아 Python 설치기를 직접 실행할 수도 있습니다.
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/install_codex.py --target /absolute/path/to/your-project
@@ -133,6 +142,7 @@ python3 /absolute/path/to/showwork/scripts/showwork.py init cancellation \
 
 ```bash
 python3 -m unittest discover -s tests -v
+npm test
 claude plugin validate . --strict
 ```
 
@@ -148,6 +158,7 @@ skills/                     두 환경이 공유하는 네 스킬
 skills/showwork/scripts/     로컬 브라우저 companion
 skills/showwork/assets/      선택·완료 설명 화면
 scripts/install_codex.py     프로젝트 스킬·지침 설치기
+scripts/cli.cjs              npx 설치 진입점
 scripts/showwork.py          선택형 증거 기록 도구
 tests/                      설치와 증거 처리 회귀 테스트
 ```
