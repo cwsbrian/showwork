@@ -10,15 +10,17 @@ try {
     allowPositionals: true,
     options: {
       target: { type: 'string' },
+      user: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
   });
   if (positionals.length > 1 || (positionals.length && positionals[0] !== 'install')) {
-    throw new Error('Expected: showwork [install] [--target <project>]');
+    throw new Error('Expected: showwork [install] [--user | --target <project>]');
   }
+  if (values.user && values.target !== undefined) throw new Error('Use either --user or --target, not both.');
   if (values.help) {
-    console.log('Usage: showwork [install] [--target <project>]\n\nInstalls Codex skills and automatic routing in the current project by default.\nRequires Python 3.11+. Existing modified skills are never overwritten.');
+    console.log('Usage: showwork [install] [--user | --target <project>]\n\nInstalls for the current user by default: ~/.agents/skills and $CODEX_HOME/AGENTS.md\n(CODEX_HOME defaults to ~/.codex; an active AGENTS.override.md takes precedence).\nUse --target for a project-only install. Requires Python 3.11+.\nExisting modified skills are never overwritten.');
   } else if (values.version) {
     console.log(require('../package.json').version);
   } else {
@@ -31,7 +33,8 @@ try {
     if (!python) throw new Error('Python 3.11+ is required. Install it, add it to PATH, and rerun this command.');
     const [command, ...prefix] = python;
     const result = spawnSync(command, [
-      ...prefix, join(__dirname, 'install_codex.py'), '--target', values.target ?? process.cwd(),
+      ...prefix, join(__dirname, 'install_codex.py'),
+      ...(values.target === undefined ? ['--user'] : ['--target', values.target]),
     ], { stdio: 'inherit' });
     if (result.error) throw result.error;
     process.exitCode = result.status ?? 1;

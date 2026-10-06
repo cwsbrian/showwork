@@ -24,7 +24,7 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.ok(packed.files.every(({ path }) => !/(__pycache__|\.pyc$|\.showwork\/|node_modules\/)/.test(path)));
     const args = ['exec', '--yes', '--offline', '--package', join(temporary, packed.filename), '--', 'showwork'];
     writeFileSync(join(project, 'AGENTS.md'), 'Keep my instructions.\n');
-    assert.match(ok(run('npm', args)), /Copied 4/);
+    assert.match(ok(run('npm', [...args, '--target', project])), /Copied 4/);
     const instructions = readFileSync(join(project, 'AGENTS.md'), 'utf8');
     assert.ok(instructions.startsWith('Keep my instructions.\n'));
     for (const file of ['scripts/companion.py', 'assets/companion.html', 'references/companion.md']) {
@@ -35,7 +35,7 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.equal(readFileSync(join(project, 'AGENTS.md'), 'utf8'), instructions);
     const skill = join(project, '.agents/skills/showwork/SKILL.md');
     writeFileSync(skill, 'User customization');
-    assert.equal(run('npm', args).status, 1);
+    assert.equal(run('npm', [...args, '--target', project]).status, 1);
     assert.equal(readFileSync(skill, 'utf8'), 'User customization');
     assert.equal(readFileSync(join(project, 'AGENTS.md'), 'utf8'), instructions);
     const cli = join(root, 'scripts/cli.cjs');
@@ -46,6 +46,7 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.match(missing.stderr, /Python 3\.11\+ is required/);
     assert.equal(run(process.execPath, [cli, '--typo']).status, 1);
     assert.equal(run(process.execPath, [cli, 'unknown']).status, 1);
+    assert.equal(run(process.execPath, [cli, '--user', '--target', project]).status, 1);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

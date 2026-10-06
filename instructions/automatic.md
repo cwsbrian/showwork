@@ -1,6 +1,6 @@
 ## Automatic Showwork
 
-Apply Showwork automatically to software work in this project. The user does not
+Apply Showwork automatically to software work. The user does not
 need to name Showwork or type a skill command. Decide the appropriate depth from
 the request and affected code; ordinary conversation needs no workflow.
 

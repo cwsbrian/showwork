@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install Showwork skills and automatic routing in one project's instructions."""
+"""Install Showwork for the current user, or an explicitly selected project."""
 
 import argparse
 import os
@@ -15,7 +15,7 @@ START = "<!-- showwork:automatic:start -->"
 END = "<!-- showwork:automatic:end -->"
 
 
-def project_instructions(target):
+def project_instructions(target, skills_root=".agents/skills"):
     # Codex uses an override instead of AGENTS.md when both exist at this level.
     override = target / "AGENTS.override.md"
     if override.is_symlink() or (override.exists() and not override.is_file()):
@@ -26,7 +26,7 @@ def project_instructions(target):
         raise ValueError(f"Expected a real instruction file: {path}")
     before = path.read_bytes().decode("utf-8") if path.exists() else ""
     newline = "\r\n" if "\r\n" in before else "\n"
-    guidance = TEMPLATE.read_text(encoding="utf-8").replace("{{SKILLS_ROOT}}", ".agents/skills").strip()
+    guidance = TEMPLATE.read_text(encoding="utf-8").replace("{{SKILLS_ROOT}}", skills_root).strip()
     block = f"{START}\n{guidance}\n{END}".replace("\n", newline)
     if START in before or END in before:
         if before.count(START) != 1 or before.count(END) != 1 or before.index(START) > before.index(END):
@@ -67,15 +67,22 @@ def contents(directory):
     return entries
 
 
-def install(target, source=SOURCE):
-    target = Path(target).expanduser().resolve(strict=True)
+def install(target=None, source=SOURCE):
+    user_install = target is None
+    target = (Path.home() if user_install else Path(target)).expanduser().resolve(strict=True)
     if not target.is_dir():
         raise ValueError(f"Target must be an existing project directory: {target}")
     destination = target / ".agents" / "skills"
-    for path in (target / ".agents", destination):
+    instruction_directory = (
+        Path(os.environ.get("CODEX_HOME") or target / ".codex").expanduser().absolute()
+        if user_install else target
+    )
+    for path in (target / ".agents", destination, instruction_directory, *instruction_directory.parents):
         if path.is_symlink() or (path.exists() and not path.is_dir()):
             raise ValueError(f"Expected a real directory: {path}")
-    instruction_path, before, after = project_instructions(target)
+    instruction_path, before, after = project_instructions(
+        instruction_directory, destination.as_posix() if user_install else ".agents/skills"
+    )
 
     pending = []
     for name in SKILLS:
@@ -94,6 +101,7 @@ def install(target, source=SOURCE):
         else:
             pending.append(name)
 
+    instruction_directory.mkdir(parents=True, exist_ok=True)
     if pending:
         destination.mkdir(parents=True, exist_ok=True)
         for name in pending:
@@ -107,14 +115,17 @@ def install(target, source=SOURCE):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target", required=True, type=Path, help="Existing project directory")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--target", type=Path, help="Install in this existing project instead of for the user")
+    scope.add_argument("--user", action="store_true", help="Install for the current user (default)")
     args = parser.parse_args()
     try:
         count = install(args.target)
     except (OSError, ValueError) as error:
         parser.exit(1, f"showwork: {error}\n")
-    print(f"Copied {count} Showwork skills; automatic routing is configured in project instructions.")
-    print("Start a new Codex session in the target project and describe your task normally.")
+    scope_name = "project" if args.target is not None else "user"
+    print(f"Copied {count} Showwork skills; automatic routing is configured in {scope_name} instructions.")
+    print("Start a new Codex session and describe your task normally.")
 
 
 if __name__ == "__main__":

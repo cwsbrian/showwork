@@ -4,6 +4,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,58 @@ SPEC.loader.exec_module(INSTALLER)
 
 
 class InstallTest(unittest.TestCase):
+    def test_user_install_preserves_global_guidance_and_leaves_projects_alone(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            project = home / "project"
+            project.mkdir()
+            with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {}):
+                self.assertEqual(INSTALLER.install(), 4)
+                instructions = home / ".codex" / "AGENTS.md"
+                self.assertIn((home / ".agents/skills/showwork/SKILL.md").as_posix(), instructions.read_text())
+                instructions.write_text("My global rules.\n" + instructions.read_text())
+                before = instructions.read_bytes()
+                self.assertEqual(INSTALLER.install(), 0)
+                self.assertEqual(instructions.read_bytes(), before)
+                self.assertEqual(list(project.iterdir()), [])
+                skill = home / ".agents/skills/showwork/SKILL.md"
+                skill.write_text("My customized skill")
+                with self.assertRaisesRegex(ValueError, "Existing install differs"):
+                    INSTALLER.install()
+                self.assertEqual(skill.read_text(), "My customized skill")
+                self.assertEqual(instructions.read_bytes(), before)
+
+    def test_user_install_respects_custom_codex_home_and_override(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            profile = home / "custom profile"
+            profile.mkdir()
+            (profile / "AGENTS.md").write_text("Keep inactive guidance")
+            override = profile / "AGENTS.override.md"
+            override.write_text("Active global rules\n")
+            with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {"CODEX_HOME": str(profile)}):
+                INSTALLER.install()
+            self.assertTrue(override.read_text().startswith("Active global rules\n"))
+            self.assertIn((home / ".agents/skills").as_posix(), override.read_text())
+            self.assertEqual((profile / "AGENTS.md").read_text(), "Keep inactive guidance")
+            self.assertFalse((home / ".codex").exists())
+
+    def test_user_instruction_conflict_prevents_skill_install(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / ".codex").mkdir()
+            instructions = home / ".codex/AGENTS.md"
+            instructions.write_text(INSTALLER.START)
+            with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {}):
+                with self.assertRaisesRegex(ValueError, "Malformed Showwork markers"):
+                    INSTALLER.install()
+                instructions.unlink()
+                (home / ".codex").rmdir()
+                (home / ".codex").symlink_to(home, target_is_directory=True)
+                with self.assertRaisesRegex(ValueError, "Expected a real directory"):
+                    INSTALLER.install()
+            self.assertFalse((home / ".agents").exists())
+
     def test_adds_automatic_routing_preserving_existing_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
