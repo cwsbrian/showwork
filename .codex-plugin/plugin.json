@@ -1,0 +1,23 @@
+{
+  "name": "showwork",
+  "version": "0.2.0",
+  "repository": "https://github.com/cwsbrian/showwork",
+  "description": "Plan, review, and verify coding work with explicit decisions and evidence.",
+  "author": {
+    "name": "Showwork contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Showwork",
+    "shortDescription": "Make coding decisions and verification visible.",
+    "longDescription": "Showwork guides task planning, code review, and verification while recording decisions, risks, and evidence in the project.",
+    "developerName": "Showwork contributors",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Use Showwork to plan this change.",
+      "Use Showwork to review my changes.",
+      "Use Showwork to verify this implementation."
+    ]
+  }
+}
