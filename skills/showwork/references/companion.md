@@ -66,7 +66,23 @@ Use inline SVG/HTML for diagrams, or `image` for an existing PNG/JPEG/WebP/GIF p
 
 Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), and `evidence` (the observed command/result/artifact location, or the precise limitation). Preserve failures and missing evidence. These labels are authored by the agent; the companion does not validate product correctness.
 
-A compact handoff might show the actual screen, a three-step “action → saved state → reload” diagram, and three acceptance checks. Choose visuals for the work actually done. Do not create placeholder screenshots or fake product observations to fill the layout.
+### Explain the changed system, not just the finished screen
+
+Read the complete relevant diff and list materially affected areas before authoring the handoff. Use the following coverage for areas that actually changed. Combine related areas when that improves understanding; do not force a fixed number of cards or cap a substantive change at three bullets.
+
+| Changed area | What the browser should explain |
+| --- | --- |
+| Router, navigation, API endpoints | A request/navigation flow diagram with concrete paths and handlers, including changed middleware/auth checks, redirects and failure branches. Add a route table: method/path or UI route, before → after behavior, inputs/outputs or status, affected callers and source location. |
+| Database schema, tables or migrations | Before/after table of columns, types, defaults, nullability, keys/constraints and indexes that changed; relationship diagram when relationships change. Name migration files and explain execution order, existing-row backfill, compatibility/deploy ordering, locking or data-loss risks where applicable, rollback procedure and whether rollback loses data. Clearly label authored, locally applied, and production-applied states; do not infer execution from the existence of a migration file. |
+| System architecture, services, modules or integrations | A component/data-flow diagram marking changed boundaries and unaffected context. Show concrete components, direction/protocol, dependencies, persistence, relevant failure/retry paths, and before/after responsibilities. Explain why the change was made and the practical tradeoff. Distinguish source-derived structure from runtime-observed behavior. |
+| UI or user workflow | Actual screen/state captures when available, the changed interaction flow, relevant empty/error/loading/mobile behavior and accessibility checks. A recreated diagram is an explanation, not an observed screenshot. |
+| Configuration, deployment or installation | Scope and path/setting changes, selection/routing behavior, upgrade/migration steps, compatibility and recovery behavior. Separate changes delivered in the code from actions actually performed in an environment. |
+
+Start with the outcome and a scope map, then the relevant domain diagrams/tables, then verification and remaining actions. Explain **what changed, why, how it behaves, and what evidence supports it**. Put source paths and meaningful line references in the section body or table. Where no baseline is available, say so rather than inventing a before state. For each important behavior, connect the actual command/request, observed result, and relevant limitation. Test counts alone are insufficient. Do not expose credentials or private payloads.
+
+The companion renders static inline HTML/SVG: draw diagrams with labeled nodes/arrows and render tables with `<table>`, `<thead>`, and `<th>`. Do not paste raw Mermaid expecting it to render, or load external scripts. Use native `<details><summary>` for optional long command output or SQL; keep important findings and risks visible. Wrap wide tables in an overflow container for small screens. Handoff sections use the full page width and expand with their content; section links help navigate a long explanation.
+
+Example for a change that adds an authenticated API and a database column: show `POST /orders → authentication → order handler → orders` with its failure branches; a route table with its real request/status contract; a schema comparison and the actual migration/backfill/rollback state; then checks linked to these behaviors. Use the actual code's names and facts, not this illustrative example. If only a label changed, explain that label change briefly; do not invent database or architecture changes to fill sections.
 
 ## Limits
 

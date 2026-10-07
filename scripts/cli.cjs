@@ -11,6 +11,7 @@ try {
     options: {
       target: { type: 'string' },
       user: { type: 'boolean' },
+      runtime: { type: 'string', default: 'both' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
@@ -19,8 +20,9 @@ try {
     throw new Error('Expected: showwork [install] [--user | --target <project>]');
   }
   if (values.user && values.target !== undefined) throw new Error('Use either --user or --target, not both.');
+  if (!['both', 'codex', 'claude'].includes(values.runtime)) throw new Error('--runtime must be both, codex, or claude.');
   if (values.help) {
-    console.log('Usage: showwork [install] [--user | --target <project>]\n\nInstalls or updates for the current user: ~/.agents/skills and $CODEX_HOME/AGENTS.md\n(CODEX_HOME defaults to ~/.codex; an active AGENTS.override.md takes precedence).\nUse --target for a project-only install. Requires Python 3.11+.\nChanged skills, including local edits, are backed up before replacement.\nRerun npx --yes github:cwsbrian/showwork to update from GitHub.');
+    console.log('Usage: showwork [install] [--user | --target <project>] [--runtime both|codex|claude]\n\nInstalls/updates both Codex and Claude Code for the current user by default.\nCodex: ~/.agents/skills + $CODEX_HOME/AGENTS.md (default ~/.codex).\nClaude: ~/.claude/skills + ~/.claude/CLAUDE.md (respects CLAUDE_CONFIG_DIR).\nUse --target for a project-only install. Requires Python 3.11+.\nChanged skills, including local edits, are backed up before replacement.\nRerun npx --yes github:cwsbrian/showwork to update from GitHub.');
   } else if (values.version) {
     console.log(require('../package.json').version);
   } else {
@@ -35,6 +37,7 @@ try {
     const result = spawnSync(command, [
       ...prefix, join(__dirname, 'install_codex.py'),
       ...(values.target === undefined ? ['--user'] : ['--target', values.target]),
+      '--runtime', values.runtime,
     ], { stdio: 'inherit' });
     if (result.error) throw result.error;
     process.exitCode = result.status ?? 1;

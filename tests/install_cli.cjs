@@ -26,6 +26,9 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     const args = ['exec', '--yes', '--offline', '--package', join(temporary, packed.filename), '--', 'showwork'];
     writeFileSync(join(project, 'AGENTS.md'), 'Keep my instructions.\n');
     assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 4/);
+    const claudeInstructions = readFileSync(join(project, '.claude/CLAUDE.md'), 'utf8');
+    assert.ok(claudeInstructions.includes('.claude/skills/showwork/SKILL.md'));
+    assert.ok(existsSync(join(project, '.claude/skills/showwork/assets/companion.html')));
     const instructions = readFileSync(join(project, 'AGENTS.md'), 'utf8');
     assert.ok(instructions.startsWith('Keep my instructions.\n'));
     for (const file of ['scripts/companion.py', 'assets/companion.html', 'references/companion.md']) {
@@ -50,6 +53,12 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.equal(run(process.execPath, [cli, '--typo']).status, 1);
     assert.equal(run(process.execPath, [cli, 'unknown']).status, 1);
     assert.equal(run(process.execPath, [cli, '--user', '--target', project]).status, 1);
+    assert.equal(run(process.execPath, [cli, '--runtime', 'unknown']).status, 1);
+    const claudeOnly = join(temporary, 'claude-only');
+    mkdirSync(claudeOnly);
+    ok(run('npm', [...args, '--runtime', 'claude', '--target', claudeOnly]));
+    assert.ok(existsSync(join(claudeOnly, '.claude/CLAUDE.md')));
+    assert.equal(existsSync(join(claudeOnly, '.agents')), false);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -72,7 +81,7 @@ test('the same npx command and cache pick up a new Git commit and update install
       cpSync(join(root, name), join(repository, name), { recursive: true });
     }
     const skill = join(repository, 'skills/showwork/SKILL.md');
-    const retired = join(repository, 'skills/showwork/retired.md');
+    const retired = join(repository, 'skills/showwork/references/retired.md');
     writeFileSync(skill, 'First release');
     writeFileSync(retired, 'Removed in next release');
     run('git', ['init', '--initial-branch=main'], repository);
@@ -86,6 +95,7 @@ test('the same npx command and cache pick up a new Git commit and update install
     assert.match(run('npx', args, project), /installed\/updated 4/);
     const installed = join(project, '.agents/skills/showwork');
     assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), 'First release');
+    assert.ok(existsSync(join(installed, 'references/retired.md')));
     writeFileSync(skill, 'Second release');
     rmSync(retired);
     // Keep package.version unchanged: Git commit freshness must decide this.
@@ -93,7 +103,8 @@ test('the same npx command and cache pick up a new Git commit and update install
     const updated = run('npx', args, project);
     assert.match(updated, /installed\/updated 1/);
     assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), 'Second release');
-    assert.equal(existsSync(join(installed, 'retired.md')), false);
+    assert.equal(existsSync(join(installed, 'references/retired.md')), false);
+    assert.equal(readFileSync(join(project, '.claude/skills/showwork/SKILL.md'), 'utf8'), 'Second release');
     const backup = updated.match(/backed up in: (.+)/)[1].trim();
     assert.equal(readFileSync(join(backup, 'showwork/SKILL.md'), 'utf8'), 'First release');
     assert.match(run('npx', args, project), /installed\/updated 0/);

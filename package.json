@@ -1,8 +1,8 @@
 {
   "name": "showwork",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
-  "description": "Install Showwork skills and automatic routing for your Codex user.",
+  "description": "Install Showwork skills and automatic routing for Codex and Claude Code.",
   "repository": "github:cwsbrian/showwork",
   "bin": { "showwork": "scripts/cli.cjs" },
   "engines": { "node": ">=20" },

@@ -71,6 +71,8 @@ For work that benefits from a durable record, use existing project conventions o
 
 ### Explain
 
+Inventory the materially changed areas from the full diff before writing the handoff. Cover each affected route, schema/migration, system boundary, or user flow at a depth that lets the user understand its behavior and impact. Follow the change-specific coverage table in the companion guide. Do not reduce a multi-layer change to a screenshot and a generic test total. The chat summary can be short while the browser contains the technical explanation, concrete source references and evidence.
+
 Read [the browser companion guide](references/companion.md) and publish a handoff page. Explain the completed change using visuals that improve understanding: actual result screenshots, a before/after comparison, or a small flow/architecture diagram. A tiny change needs only a tiny explanation, not a dashboard. Include verification evidence and gaps. Label explanatory diagrams and mockups separately from observed output; the browser does not turn a claim into proof.
 
 Open the page through the available browser tool or share its full local URL. This is a walkthrough, not a request for approval. Also give a brief chat summary so the outcome is accessible without the page. If the browser or server cannot run, preserve the page source, share its location, and state that limitation. Do not claim completion while a required criterion is unproved or failing; state the precise remaining work instead.

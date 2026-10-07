@@ -15,6 +15,61 @@ SPEC.loader.exec_module(INSTALLER)
 
 
 class InstallTest(unittest.TestCase):
+    def test_claude_user_install_update_preserves_settings_and_instructions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            config = home / "claude profile"
+            config.mkdir()
+            instructions = config / "CLAUDE.md"
+            instructions.write_bytes(b"My Claude rules.\r\n")
+            settings = config / "settings.json"
+            settings.write_text('{"hooks":{"custom":[]}}')
+            with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {"CLAUDE_CONFIG_DIR": str(config)}):
+                self.assertEqual(INSTALLER.install(runtime="claude"), 4)
+                self.assertTrue(instructions.read_bytes().startswith(b"My Claude rules.\r\n"))
+                self.assertIn((config / "skills/showwork/SKILL.md").as_posix(), instructions.read_text())
+                self.assertEqual(INSTALLER.install(runtime="claude"), 0)
+                skill = config / "skills/showwork/SKILL.md"
+                skill.write_text("Local Claude changes")
+                self.assertEqual(INSTALLER.install(runtime="claude"), 1)
+                backups = list((config / "showwork-backups").glob("update-*/showwork/SKILL.md"))
+                self.assertEqual(backups[0].read_text(), "Local Claude changes")
+            self.assertEqual(settings.read_text(), '{"hooks":{"custom":[]}}')
+            self.assertFalse((home / ".agents").exists())
+            self.assertFalse((home / ".codex").exists())
+
+    def test_both_preflight_rejects_invalid_claude_before_codex_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / ".claude").mkdir()
+            (project / ".claude/CLAUDE.md").write_text(INSTALLER.START)
+            with patch("sys.argv", ["install_codex.py", "--target", str(project)]), self.assertRaises(SystemExit) as result:
+                INSTALLER.main()
+            self.assertEqual(result.exception.code, 1)
+            self.assertFalse((project / ".agents").exists())
+            (project / ".claude/CLAUDE.md").unlink()
+            (project / ".claude/.showwork-install.lock").mkdir()
+            with patch("sys.argv", ["install_codex.py", "--target", str(project)]), self.assertRaises(SystemExit):
+                INSTALLER.main()
+            self.assertFalse((project / ".agents").exists())
+
+    def test_claude_symlink_refused_before_skills_and_failed_write_rolls_back(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / ".claude").mkdir()
+            external = project / "external.md"
+            external.write_text("Keep")
+            instructions = project / ".claude/CLAUDE.md"
+            instructions.symlink_to(external)
+            with self.assertRaisesRegex(ValueError, "Expected a real instruction file"):
+                INSTALLER.install(project, runtime="claude")
+            instructions.unlink()
+            with patch.object(INSTALLER, "write_instructions", side_effect=OSError("Write failed")), self.assertRaises(OSError):
+                INSTALLER.install(project, runtime="claude")
+            self.assertFalse(instructions.exists())
+            self.assertEqual(list((project / ".claude/skills").iterdir()), [])
+            self.assertEqual(external.read_text(), "Keep")
+
     def test_user_install_preserves_global_guidance_and_leaves_projects_alone(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

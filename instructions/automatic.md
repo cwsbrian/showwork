@@ -30,6 +30,14 @@ browser companion's handoff mode to explain the result with relevant visuals:
 actual screenshots when available, before/after comparisons, a flow or diagram,
 and verification evidence and gaps. Read the same companion guide. Keep the
 visuals proportionate and distinguish observed output from explanatory mockups.
+Cover every materially changed area, not just the visible UI or a test count.
+For changed routing, include a request/navigation flow diagram and a route table;
+for schema/migrations, include before/after tables, data migration and rollback
+details, distinguishing authored migrations from ones actually executed;
+for changed architecture, show component boundaries, dependencies and data flow.
+Use concrete names from the diff, source locations, reasons and relevant evidence.
+Put detailed explanations in the browser; a short chat summary must not make the
+browser handoff equally sparse. Omit domains that did not change.
 This is a walkthrough, not another approval gate. Share the browser URL and a
 short summary in chat; if the browser is unavailable, provide the saved artifact
 and state the limitation instead of pretending it was displayed.

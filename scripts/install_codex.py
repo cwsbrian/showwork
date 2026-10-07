@@ -16,13 +16,15 @@ START = "<!-- showwork:automatic:start -->"
 END = "<!-- showwork:automatic:end -->"
 
 
-def project_instructions(target, skills_root=".agents/skills"):
+def project_instructions(target, skills_root=".agents/skills", runtime="codex"):
     # Codex uses an override instead of AGENTS.md when both exist at this level.
     override = target / "AGENTS.override.md"
-    if override.is_symlink() or (override.exists() and not override.is_file()):
+    if runtime == "codex" and (override.is_symlink() or (override.exists() and not override.is_file())):
         raise ValueError(f"Expected a real instruction file: {override}")
     # Filling an empty override would hide the previously active AGENTS.md.
-    path = override if override.is_file() and override.read_bytes().strip() else target / "AGENTS.md"
+    path = target / "CLAUDE.md" if runtime == "claude" else (
+        override if override.is_file() and override.read_bytes().strip() else target / "AGENTS.md"
+    )
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise ValueError(f"Expected a real instruction file: {path}")
     before = path.read_bytes().decode("utf-8") if path.exists() else ""
@@ -68,21 +70,29 @@ def contents(directory):
     return entries
 
 
-def install(target=None, source=SOURCE):
+def install(target=None, source=SOURCE, runtime="codex", check_only=False):
+    if runtime not in {"codex", "claude"}:
+        raise ValueError(f"Unknown runtime: {runtime}")
     user_install = target is None
     target = (Path.home() if user_install else Path(target)).expanduser().resolve(strict=True)
     if not target.is_dir():
         raise ValueError(f"Target must be an existing project directory: {target}")
-    destination = target / ".agents" / "skills"
-    instruction_directory = (
-        Path(os.environ.get("CODEX_HOME") or target / ".codex").expanduser().absolute()
-        if user_install else target
-    )
-    for path in (target / ".agents", destination, instruction_directory, *instruction_directory.parents):
+    if runtime == "claude":
+        config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or target / ".claude").expanduser().absolute() if user_install else target / ".claude"
+        destination = config / "skills"
+        instruction_directory = config
+    else:
+        destination = target / ".agents" / "skills"
+        instruction_directory = (
+            Path(os.environ.get("CODEX_HOME") or target / ".codex").expanduser().absolute()
+            if user_install else target
+        )
+    skills_root = destination.as_posix() if user_install else (".claude/skills" if runtime == "claude" else ".agents/skills")
+    for path in (destination.parent, destination, *destination.parents, instruction_directory, *instruction_directory.parents):
         if path.is_symlink() or (path.exists() and not path.is_dir()):
             raise ValueError(f"Expected a real directory: {path}")
     instruction_path, before, after = project_instructions(
-        instruction_directory, destination.as_posix() if user_install else ".agents/skills"
+        instruction_directory, skills_root, runtime
     )
 
     pending = []
@@ -101,9 +111,16 @@ def install(target=None, source=SOURCE):
             previous[name] = None
             pending.append(name)
 
+    backup_root = destination.parent / "showwork-backups"
+    if backup_root.is_symlink() or (backup_root.exists() and not backup_root.is_dir()):
+        raise ValueError(f"Expected a real backup directory: {backup_root}")
+    lock = destination.parent / ".showwork-install.lock"
+    if lock.exists() or lock.is_symlink():
+        raise ValueError(f"Another install is active. If it was interrupted, remove {lock} and retry.")
+    if check_only:
+        return len(pending)
     instruction_directory.mkdir(parents=True, exist_ok=True)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    lock = destination.parent / ".showwork-install.lock"
     try:
         lock.mkdir()
     except FileExistsError:
@@ -115,7 +132,7 @@ def install(target=None, source=SOURCE):
             current = contents(installed) if installed.exists() or installed.is_symlink() else None
             if current != snapshot:
                 raise ValueError(f"Files changed during installation: {installed}; retry.")
-        if project_instructions(instruction_directory, destination.as_posix() if user_install else ".agents/skills")[1] != before:
+        if project_instructions(instruction_directory, skills_root, runtime) != (instruction_path, before, after):
             raise ValueError("Instructions changed during installation; retry.")
         apply_update(destination, source, pending, previous, instruction_path, before, after)
     finally:
@@ -176,15 +193,20 @@ def main():
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--target", type=Path, help="Install in this existing project instead of for the user")
     scope.add_argument("--user", action="store_true", help="Install for the current user (default)")
+    parser.add_argument("--runtime", choices=("both", "codex", "claude"), default="both")
     args = parser.parse_args()
     try:
-        count = install(args.target)
+        runtimes = ("codex", "claude") if args.runtime == "both" else (args.runtime,)
+        for runtime in runtimes:
+            install(args.target, runtime=runtime, check_only=True)
+        version = json.loads((SOURCE.parent / "package.json").read_text(encoding="utf-8"))["version"]
+        scope_name = "project" if args.target is not None else "user"
+        for runtime in runtimes:
+            count = install(args.target, runtime=runtime)
+            print(f"Showwork {version} ({runtime}): installed/updated {count} skills; automatic routing is configured in {scope_name} instructions.")
     except (OSError, ValueError) as error:
         parser.exit(1, f"showwork: {error}\n")
-    scope_name = "project" if args.target is not None else "user"
-    version = json.loads((SOURCE.parent / "package.json").read_text(encoding="utf-8"))["version"]
-    print(f"Showwork {version}: installed/updated {count} skills; automatic routing is configured in {scope_name} instructions.")
-    print("Start a new Codex session and describe your task normally.")
+    print("Start a new session in the installed runtime(s) and describe your task normally.")
 
 
 if __name__ == "__main__":

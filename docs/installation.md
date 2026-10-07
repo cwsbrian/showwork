@@ -1,158 +1,100 @@
-# Showwork 설치
+# Showwork 설치와 업데이트
 
-Showwork 0.2.3은 일반 개발 요청에 자동으로 적용되도록 연결합니다. Codex는 사용자 또는 프로젝트 지침, Claude Code는 요청 훅을 통해 같은 자동 판단 규칙과 `skills/`를 읽습니다. Python 3.11 이상이 필요합니다. 시각적 선택과 완료 설명을 위한 로컬 브라우저 서버가 스킬에 포함됩니다. 외부 서비스나 MCP는 필요하지 않습니다. 자동 적용 지침을 제공하며, 모델의 모든 행동이나 검증 성공을 강제하는 장치는 아닙니다.
+Showwork 0.3.0은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
 
-## Codex: npx로 사용자 설치 (기본)
+## 설치·업데이트는 같은 명령
 
-Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상을 준비하고 **어느 폴더에서든** 실행합니다. 저장소를 따로 내려받을 필요는 없습니다.
+어느 폴더에서든 실행하세요.
 
 ```bash
 npx --yes github:cwsbrian/showwork
 ```
 
-사용자 설치를 명시하거나, 프로젝트 하나에만 설치할 수도 있습니다.
+처음에는 설치하고, 다음부터는 GitHub 기본 브랜치의 최신 커밋으로 갱신합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 여세요. 프로젝트마다 반복 설치할 필요가 없습니다.
+
+| 도구 | 사용자 스킬 | 자동 적용 지침 | 백업 |
+| --- | --- | --- | --- |
+| Codex | `~/.agents/skills/showwork*` | `~/.codex/AGENTS.md` | `~/.agents/showwork-backups/` |
+| Claude Code | `~/.claude/skills/showwork*` | `~/.claude/CLAUDE.md` | `~/.claude/showwork-backups/` |
+
+Codex 지침은 `CODEX_HOME`이 설정되면 그 위치를 사용하고, 내용이 있는 `AGENTS.override.md`가 있으면 그 파일을 갱신합니다. Claude는 `CLAUDE_CONFIG_DIR`이 설정되면 그 위치에 스킬과 지침을 설치합니다. 사용자 지침의 스킬 참조는 절대 경로입니다. Showwork 관리 블록 밖의 기존 지침과 다른 스킬은 보존합니다. Claude의 `settings.json`, 인증, MCP, 기존 훅 설정은 수정하지 않습니다.
+
+Claude 사용자 설치는 개인 스킬과 `CLAUDE.md` 지침을 사용합니다. 별도 플러그인 실행 인자나 요청 훅 등록이 필요하지 않습니다. 네이티브 플러그인 목록에 등록되는 설치는 아닙니다. 관리 정책이 사용자 지침/스킬을 비활성화한 환경에서는 해당 정책이 우선합니다. [Claude 스킬 위치](https://code.claude.com/docs/en/skills#choose-where-skills-load) · [Claude 사용자 지침](https://code.claude.com/docs/en/memory) · [Codex 스킬 위치](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [Codex 지침 우선순위](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+
+## 한 도구 또는 한 프로젝트만 설치
 
 ```bash
-npx --yes github:cwsbrian/showwork install --user
-npx --yes github:cwsbrian/showwork install --target /absolute/path/to/your-project
+npx --yes github:cwsbrian/showwork --runtime claude
+npx --yes github:cwsbrian/showwork --runtime codex
+npx --yes github:cwsbrian/showwork --target /absolute/path/to/your-project
 npx --yes github:cwsbrian/showwork --help
 ```
 
-npx가 GitHub 패키지를 캐시에 내려받고, CLI는 기존 Python 설치기를 실행합니다. 기본 설치 대상은 현재 사용자입니다. 스킬은 `~/.agents/skills`, 자동 지침은 `~/.codex/AGENTS.md`에 저장합니다. `CODEX_HOME`이 설정되어 있으면 그 디렉터리에 지침을 기록하고, 내용이 있는 `AGENTS.override.md`가 있으면 그 파일을 사용합니다. 스킬 경로는 사용자 홈을 따르며 지침에는 절대 경로를 기록하므로 작업 폴더가 바뀌어도 사용할 수 있습니다. 현재 프로젝트에 파일이나 npm 의존성을 추가하지 않습니다. Python을 찾지 못하면 설치 전에 안내하고 종료합니다. 설치 후 원하는 프로젝트에서 새 Codex 채팅을 여세요.
+`--runtime`은 `both`(기본), `codex`, `claude` 중 선택합니다. `--target`이 있으면 그 프로젝트에만 설치합니다. `--user`를 명시해도 기본 사용자 설치와 같으며 `--target`과 함께 쓸 수 없습니다.
 
-현재는 GitHub 직접 설치만 제공합니다. npm 레지스트리에 게시하지 않았으므로 `npx showwork`는 이 프로젝트의 설치 명령이 아닙니다. `package.json`의 `private`는 실수로 npm에 게시하는 것을 막는 설정이며 GitHub 공개 여부와는 별개입니다. 이 CLI는 Codex 사용자·프로젝트 설치용이며 Claude Code에는 아래 플러그인 로딩 방법을 사용합니다.
+| 프로젝트 설치 | 스킬 | 지침 |
+| --- | --- | --- |
+| Codex | `<project>/.agents/skills/showwork*` | `<project>/AGENTS.md` (활성 override 우선) |
+| Claude Code | `<project>/.claude/skills/showwork*` | `<project>/.claude/CLAUDE.md` |
 
-기존 스킬 내용이 다르면 백업 후 최신 파일로 교체합니다. 직접 수정한 스킬도 백업에 보존되지만 활성 스킬에는 새 버전이 적용됩니다. 지침의 Showwork 관리 블록 밖에 있는 사용자 내용은 보존합니다. [사용자 스킬 위치](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [전역 지침과 우선순위](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+기존 프로젝트 루트 `CLAUDE.md`는 그대로 보존합니다. 대상 프로젝트는 이미 존재해야 합니다. 기본 사용자 설치는 현재 작업 폴더에 파일이나 npm 의존성을 추가하지 않습니다.
 
-Python만 사용하려면 `python3 /absolute/path/to/showwork/scripts/install_codex.py --user`를 실행하세요. 인자 없이 실행해도 사용자 설치입니다. `--user`와 `--target`은 함께 사용할 수 없습니다.
-
-0.2.1까지의 기본 npx 설치는 프로젝트 단위였습니다. 0.2.2부터 사용자 설치가 기본이며 이전 프로젝트 파일은 자동 삭제하지 않습니다. 사용자 설치 후 프로젝트의 `.agents/skills/showwork*` 네 디렉터리에 사용자 변경이 없는지 확인하고 백업한 뒤 제거하면 중복 노출을 피할 수 있습니다. 그 프로젝트 지침의 Showwork 관리 블록도 함께 제거하세요. 다른 지침이나 스킬은 보존하세요.
-
-## 업데이트: 설치 명령 재실행
-
-```bash
-npx --yes github:cwsbrian/showwork
-```
-
-같은 명령을 다시 실행하면 GitHub 기본 브랜치의 최신 커밋을 가져와 업데이트합니다. 프로젝트 설치는 기존과 같은 `--target`을 지정하세요. 별도의 삭제·백업 작업은 필요하지 않습니다. 0.2.2 이전 설치도 같은 방식으로 갱신합니다. npm 10에서 같은 캐시·같은 명령으로 원격 Git 커밋 변경을 가져오는 동작을 검증했습니다. 최신 버전 확인에는 네트워크가 필요하며, `--offline`이나 특정 커밋에 고정한 주소는 최신 버전 확인용이 아닙니다.
-
-- 변경된 스킬의 이전 디렉터리 전체를 `~/.agents/showwork-backups/update-*/`에 보관하고 새 버전으로 교체합니다. 프로젝트 설치의 백업은 `<project>/.agents/showwork-backups/`입니다. 출력에 정확한 백업 경로가 표시됩니다.
-- 사용자 수정이나 추가 파일도 백업에 남습니다. 업데이트 후 계속 필요한 수정은 백업과 새 버전을 비교해 반영하세요. 배포판에서 삭제된 파일은 활성 스킬에서도 제거됩니다.
-- 지침의 관리 블록만 갱신하고 나머지 사용자 지침은 보존합니다. 지침을 변경할 때는 이전 지침 파일도 백업합니다.
-- 파일을 먼저 준비한 뒤 교체합니다. 교체나 지침 쓰기가 실패하면 교체한 스킬을 복원합니다. 같은 내용이면 재복사하거나 백업을 추가하지 않습니다.
-- 동시에 두 설치를 실행하지 않습니다. 강제 종료나 전원 장애로 중단된 경우 출력된 백업을 확인하세요. 실행 중인 설치가 없는데 잠금 오류가 남으면 `~/.agents/.showwork-install.lock` 디렉터리(프로젝트 설치는 해당 프로젝트 내부)를 제거하고 재실행하세요. 운영체제 강제 종료까지 자동 복원을 보장하지는 않습니다.
-
-출력에 설치한 버전과 갱신한 스킬 수가 표시됩니다. 업데이트 후 새 Codex 채팅을 여세요. Python 설치기를 직접 실행한다면 먼저 원본 저장소를 갱신해야 합니다. 설치기는 실행 중인 번들의 내용을 설치합니다.
-
-백업은 자동 삭제하지 않습니다. 복구가 필요하면 설치를 실행 중이지 않은지 확인하고 해당 백업의 스킬 디렉터리를 `.agents/skills/`로 복원하세요. 이후 업데이트 시 다시 최신 내용으로 교체됩니다.
-
-## 제거
- 제거할 때는 네 디렉터리와 실제 사용자 지침 파일의 Showwork 관리 블록만 제거합니다. 지침 파일 전체를 삭제하지 마세요. 프로젝트별 지침은 사용자 지침보다 우선할 수 있습니다.
-
-## Claude Code: 로컬 플러그인
-
-프로젝트 폴더에서 Showwork 저장소의 절대 경로를 전달합니다. 다음 두 경로를 실제 경로로 바꾸세요.
+저장소를 직접 내려받아 Python만으로 실행할 수도 있습니다. 파일 이름은 이전 버전과의 호환성을 위해 유지합니다.
 
 ```bash
-cd /absolute/path/to/your-project
-claude --plugin-dir /absolute/path/to/showwork
+git clone https://github.com/cwsbrian/showwork.git
+python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 ```
 
-세션 안에서 평소처럼 요청합니다.
+Python 진입점도 기본은 두 도구이며 `--runtime`/`--target`을 지원합니다. 이 경우 업데이트 전에 원본 저장소를 먼저 갱신하세요. 설치기는 실행 중인 번들의 내용을 설치합니다.
 
-```text
-로그인 오류를 수정해줘
-```
+## 업데이트와 복구
 
-`UserPromptSubmit` 훅은 요청마다 자동 판단 지침과 스킬 위치를 전달합니다. 코드 작업인지와 필요한 절차는 모델이 판단합니다. 훅 자체가 사용자 문장을 키워드로 분류하거나 도구 실행을 차단하지 않습니다. 훅을 비활성화하는 실행 모드나 관리 정책에서는 자동 연결도 동작하지 않습니다. [Claude 요청 훅 문서](https://code.claude.com/docs/en/hooks#userpromptsubmit)
+동일한 npx 명령을 다시 실행하면 됩니다. 0.2.x의 Codex 전용 설치도 갱신하면서 Claude 사용자 설치를 추가합니다. 최신 커밋 확인에는 네트워크가 필요합니다. `--offline` 또는 특정 커밋에 고정한 주소는 최신 확인용이 아닙니다. npm 10에서 같은 캐시·같은 명령으로 새 Git 커밋을 가져오는 동작을 검증했습니다.
 
-모드를 직접 지정하려면 다음 명령도 사용할 수 있습니다.
+- 달라진 스킬 디렉터리는 각 도구의 `showwork-backups/update-*/`에 이전 내용 전체를 보관하고 새 버전으로 교체합니다. 정확한 백업 위치를 출력합니다.
+- 직접 수정하거나 추가한 파일도 백업에 남습니다. 활성 스킬에는 배포판이 적용되므로 계속 필요한 사용자 수정은 백업과 비교해 다시 반영하세요. 배포판에서 제거된 파일은 활성 스킬에서도 제거됩니다.
+- 지침은 관리 블록만 갱신하며 변경 전 파일도 백업합니다. 같은 내용이면 재복사하거나 백업을 추가하지 않습니다.
+- 두 도구 모두 먼저 경로·지침·소스·기존 잠금을 검사합니다. 실제 교체와 오류 복원은 도구별로 수행합니다. 두 번째 도구에서 예기치 않은 쓰기 실패가 나면 첫 번째 도구의 성공한 업데이트는 유지됩니다. 실패 원인을 해결하고 같은 명령을 다시 실행하세요.
+- 스킬 교체나 지침 쓰기가 실패하면 해당 도구의 이전 파일을 복원합니다. 운영체제 강제 종료·전원 장애까지 자동 복원을 보장하지는 않습니다. 중단됐다면 백업을 확인하고, 실행 중인 설치가 없는데 잠금 오류가 남을 때만 해당 도구의 `.showwork-install.lock` 디렉터리를 제거한 뒤 재실행하세요.
 
-```text
-/showwork:run 로그인 오류를 수정해줘
-/showwork:plan 로그인 오류 수정 계획을 세워줘
-/showwork:review 현재 변경사항을 리뷰해줘
-/showwork:verify 로그인 오류가 해결됐는지 검증해줘
-```
+백업은 스킬 검색 경로 밖에 보관하며 자동 삭제하지 않습니다. 복구하려면 설치가 실행 중이지 않은지 확인하고 해당 백업의 스킬 디렉터리를 원래 `skills/` 위치로 복원하세요. 이후 설치 명령을 다시 실행하면 다시 최신 배포판이 적용됩니다.
 
-`commands/`의 짧은 명령은 `${CLAUDE_PLUGIN_ROOT}`를 통해 공통 스킬을 읽습니다. 공통 스킬도 `/showwork:showwork`, `/showwork:showwork-plan`, `/showwork:showwork-review`, `/showwork:showwork-verify` 이름으로 노출될 수 있습니다. 짧은 명령을 사용하면 됩니다.
+0.2.1까지의 기본 설치는 프로젝트 단위였습니다. 이전 프로젝트 파일이나 수동 플러그인 등록은 자동 삭제하지 않습니다. 사용자 설치로 통일하려면 기존 프로젝트의 Showwork 스킬 네 디렉터리와 지침의 관리 블록을 백업한 뒤 정리하세요. 같은 스킬의 사용자 설치와 플러그인 중복 활성화는 피하세요.
 
-`--plugin-dir`로 불러온 플러그인은 해당 세션에서만 활성화됩니다. 저장소를 수정했다면 새 세션을 시작하세요. 이 방법은 전역 설정이나 마켓플레이스를 수정하지 않습니다. 명령이 보이지 않으면 `claude --help`에서 `--plugin-dir` 지원 여부를 확인하세요. [Claude Code 플러그인 문서](https://code.claude.com/docs/en/plugins)
+## 사용과 확인
 
-## Codex: 프로젝트에만 설치 (선택)
-
-Python 3.11 이상과 프로젝트 스킬을 지원하는 Codex를 사용하세요. 대상 프로젝트는 이미 존재하는 폴더여야 합니다.
-
-```bash
-python3 /absolute/path/to/showwork/scripts/install_codex.py --target /absolute/path/to/your-project
-codex -C /absolute/path/to/your-project
-```
-
-Codex 앱에서는 설치 후 대상 프로젝트에서 **새 채팅**을 엽니다. 이전 채팅에는 갱신된 프로젝트 지침이 반영되지 않을 수 있습니다. `$showwork` 없이 일반 요청을 입력하세요.
-
-```text
-로그인 오류를 수정해줘
-```
-
-특정 모드를 명시하고 싶다면 다음 명령도 사용할 수 있습니다.
-
-```text
-$showwork 로그인 오류를 수정해줘
-$showwork-plan 로그인 오류 수정 계획을 세워줘
-$showwork-review 현재 변경사항을 리뷰해줘
-$showwork-verify 로그인 오류가 해결됐는지 검증해줘
-```
-
-프로젝트의 `.agents/skills` 검색과 `$`를 통한 호출은 [Codex 스킬 문서](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)에 설명되어 있습니다.
-
-설치기는 네 스킬을 `.agents/skills/showwork*`에 함께 복사합니다. 서로 참조하므로 하나만 옮기지 마세요. 같은 스킬은 다시 복사하지 않습니다. 다른 내용이나 추가 파일이 있으면 백업 후 새 버전으로 교체합니다. 대상 `.agents`나 `skills`가 심볼릭 링크인 경우에도 멈춥니다.
-
-자동 적용 규칙은 프로젝트 루트의 `AGENTS.md`에 `<!-- showwork:automatic:start -->`부터 `<!-- showwork:automatic:end -->`까지의 관리 블록으로 저장합니다. 내용이 있는 `AGENTS.override.md`가 있으면 그 파일에 기록합니다. 같은 위치에서는 override가 우선하며 빈 파일은 건너뛰기 때문입니다. 관리 블록 밖의 사용자 지침은 보존하고, 재실행해도 블록이 중복되지 않습니다. 불완전한 마커나 지침 파일의 심볼릭 링크는 수정 전에 거부합니다. 다른 스킬과 전역 설정은 수정하지 않습니다. [Codex 프로젝트 지침 문서](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
-
-0.1.0의 스킬만 설치한 프로젝트는 같은 설치 명령을 다시 실행하면 자동 적용 블록이 추가됩니다. 스킬 내용이 달라진 경우는 아래 업데이트 방법을 따르세요.
-
-프로젝트 업데이트도 같은 `--target` 설치 명령을 다시 실행하면 됩니다. 이전 파일은 자동 백업됩니다. 제거할 때는 해당 네 디렉터리와 지침 파일의 Showwork 관리 블록만 제거하세요. 사용자 지침이 있는 `AGENTS.md` 전체를 삭제하지 마세요.
-
-선택 기능인 증거 기록 도구는 복사하지 않습니다. 스킬은 이 도구 없이 작동합니다. 기록 도구가 필요하면 대상 프로젝트에서 원본 저장소의 스크립트를 절대 경로로 실행하세요. Python 3.11 이상이 필요합니다.
-
-브라우저 companion은 이 증거 기록 도구와 별개이며 `showwork` 스킬 안에 함께 복사됩니다. 설치 후 `<project>/.agents/skills/showwork/scripts/companion.py`와 `assets/companion.html`이 있어야 합니다. 시각적 선택이 필요한 경우 또는 완료 설명을 할 때 에이전트가 서버를 실행하고 페이지를 작성합니다. [Companion 사용법](../skills/showwork/references/companion.md)
-
-```bash
-cd /absolute/path/to/your-project
-python3 /absolute/path/to/showwork/scripts/showwork.py --help
-```
-
-## Codex 네이티브 플러그인과의 차이
-
-`.codex-plugin/plugin.json`은 네이티브 플러그인 배포용 매니페스트입니다. 이 개발 환경의 `codex plugin --help`에는 `add`, `list`, `marketplace`, `remove`가 있고, `codex plugin add`는 마켓플레이스에 등록된 `플러그인@마켓플레이스`를 받습니다. Claude의 `--plugin-dir`과 같은 로컬 로딩 명령은 현재 CLI 도움말에 없습니다.
-
-이 설치기는 마켓플레이스를 등록하지 않습니다. 위의 사용자·프로젝트 설치가 자동 연결까지 포함한 Codex 설치 방법입니다. 이는 플러그인 설치 목록에 표시되는 네이티브 설치가 아니라 스킬·지침 설치입니다. 설치 명령을 재실행할 때 업데이트되며 백그라운드에서 자동으로 변경하지 않습니다. 기존 마켓플레이스로 배포하려면 운영자가 이 플러그인을 먼저 등록해야 합니다. 네이티브 플러그인 등록만으로 이 프로젝트 지침이 추가되지는 않습니다.
-
-## 자동 적용 확인
-
-새 채팅에서 다음을 그대로 입력하세요.
+새 세션에서 평소처럼 요청합니다.
 
 ```text
 HTML/CSS/JavaScript로 간단한 할 일 앱을 만들어줘.
 추가, 완료 처리, 삭제가 가능하고 새로고침해도 목록이 유지되어야 해.
 ```
 
-이처럼 단순하고 명확한 작업은 Showwork 적용과 경로를 짧게 알린 후 바로 구현해도 정상입니다. 미리보기나 UI 컨펌을 의무적으로 요구하지 않습니다. 최종 결과를 설명할 때는 브라우저에서 실제 결과 또는 설명용 흐름과 함께 추가·완료·삭제·새로고침 검증 근거와 미검증 사항을 보여줘야 합니다.
+단순하고 명확한 작업은 바로 구현해도 정상입니다. 시각적 선택이 필요할 때만 브라우저에서 비교합니다. 완료 설명은 바뀐 영역에 맞춰 라우트 흐름도·경로 표, 스키마 전후 비교·마이그레이션 상태, 시스템 구조·데이터 흐름, 검증 근거를 보여줍니다. 변경하지 않은 영역을 억지로 채우지 않습니다. 지침은 모델의 행동을 유도하며 모든 응답의 완전성을 강제하는 정책 엔진은 아닙니다.
 
-선택 기능은 실제로 두 레이아웃 중 결정할 필요가 있는 요청으로 따로 시험하세요. 브라우저 비교안 → 선택 기록 → 구현으로 이어지는지, 완료 화면에는 승인 버튼이 없는지 확인합니다.
+직접 호출하려면 Codex는 `$showwork`, Claude는 `/showwork`를 사용합니다. `showwork-plan`, `showwork-review`, `showwork-verify`도 같은 접두사로 호출할 수 있습니다. 아무 안내 없이 진행한다면 설치 범위의 스킬·지침 블록과 새 세션 여부, 상위 관리 정책을 확인하세요.
 
-아무 안내 없이 바로 구현한다면 선택한 설치 범위의 스킬과 지침 블록이 있는지, 새 채팅을 시작했는지 확인하세요. Claude는 플러그인 로딩과 훅 활성화도 확인해야 합니다. 하위 폴더나 상위 우선순위의 지침이 적용 방식을 바꿀 수도 있습니다.
+## Claude 로컬 플러그인 방식 (선택)
 
-## 검증
-
-Showwork 저장소에서 실행합니다.
+npx 사용자 설치를 사용한다면 필요하지 않습니다. 저장소를 플러그인으로 직접 불러오려면:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_install.py'
+claude --plugin-dir /absolute/path/to/showwork
+```
+
+이 방식은 세션에 플러그인을 로드하며, 함께 제공되는 `UserPromptSubmit` 훅으로 자동 판단 지침을 전달합니다. `/showwork:run`, `/showwork:plan`, `/showwork:review`, `/showwork:verify` 단축 명령을 사용합니다. 훅은 도구 실행을 차단하지 않습니다. [Claude 플러그인](https://code.claude.com/docs/en/plugins)
+
+## 제거와 검증
+
+선택한 설치 범위에서 Showwork 스킬 네 디렉터리와 지침 파일의 `showwork:automatic:start`~`showwork:automatic:end` 관리 블록만 제거하세요. 다른 지침이 있는 파일 전체를 삭제하지 마세요. 선택 기능인 증거 기록 도구는 복사하지 않으며, 브라우저 companion은 `showwork` 스킬에 포함됩니다.
+
+개발 검사는 저장소에서 실행합니다.
+
+```bash
+python3 -m unittest discover -s tests -v
 npm test
 claude plugin validate . --strict
 ```
 
-Python 테스트는 임시 폴더에서 설치, 업데이트, 백업, 실패 시 복원, 심볼릭 링크 거부를 확인합니다. `npm test`는 실제 npm 배포 파일을 만들어 캐시에서 실행하고 프로젝트 지정·공백 경로 설치, 재실행, 사용자 변경 백업, Python 누락 안내를 확인합니다. 같은 명령·같은 캐시에서 Git 커밋 변경을 가져와 실제 설치 파일이 갱신되는지도 확인합니다. 마지막 명령은 Claude 플러그인 매니페스트를 검사합니다. 매니페스트 통과는 모델이 실제 작업에서 지시를 잘 따른다는 보장은 아닙니다.
-
-형식 참고: [Claude 매니페스트 및 경로 변수](https://code.claude.com/docs/en/plugins-reference), [Claude 스킬과 명령 인자](https://code.claude.com/docs/en/skills).
+실제 브라우저 검사는 Playwright와 Chromium이 있는 개발 환경에서 `tests/browser_companion.cjs`를 실행합니다. 자세한 검증 범위와 한계는 [검증 기록](validation.md)을 참고하세요.
