@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showwork · 연결된 흐름도와 ERD 예시</title>
+<style>
+body{font:16px/1.6 system-ui,sans-serif;color:#203a40;margin:0;padding:24px;background:#fff}section{max-width:1120px;margin:0 auto 40px}h2{margin:0 0 8px}p{margin:8px 0 16px}.diagram{overflow-x:auto;border:1px solid #d8e2e1;border-radius:12px;background:#fbfdfd}.diagram:focus-visible{outline:3px solid #167568;outline-offset:3px}.diagram svg{display:block;width:100%;min-width:1000px;max-width:none;height:auto}svg text{font-family:system-ui,sans-serif;fill:#203a40;font-size:16px}svg .heading{font-weight:700;font-size:18px}svg .small{font-size:14px}svg .node{fill:#fff;stroke:#708c91;stroke-width:1.5}svg .added{fill:#e7f5ee;stroke:#227d5b;stroke-width:2}svg .decision{fill:#fff4df;stroke:#a1772e;stroke-width:1.5}svg .failure{fill:#fff0ef;stroke:#b57068;stroke-width:1.5}svg .edge{fill:none;stroke:#416b70;stroke-width:2}svg .new-edge{fill:none;stroke:#227d5b;stroke-width:2.5}.muted{color:#536d72}summary{cursor:pointer;font-weight:600}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid #d8e2e1}.support{overflow-x:auto}code{font-size:.95em}
+</style>
+<body>
+<section id="routing-example">
+<h2>라우팅 · 요청이 어디서 갈라지는지 보기</h2>
+<p>가상 예시: 문서 조회 API에 삭제 기능을 추가했습니다. 인증·관리 권한·문서 존재 여부가 응답을 결정합니다. 실제 앱을 분석한 결과가 아닙니다.</p>
+<div class="diagram" role="region" aria-label="문서 삭제 흐름도, 좁은 화면에서는 좌우로 스크롤" tabindex="0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 750" role="img" aria-labelledby="route-title route-desc">
+<title id="route-title">문서 삭제 요청의 분기와 응답</title>
+<desc id="route-desc">확인된 DELETE 요청은 인증 실패 시 401, 권한 부족 시 403, 문서가 없으면 404를 반환한다. 성공하면 데이터베이스 트랜잭션을 커밋하고 204를 반환하여 목록으로 이동한다. 가상 계약을 설명하는 예시이다.</desc>
+<defs><marker id="route-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#416b70"/></marker></defs>
+<rect x="20" y="45" width="310" height="690" rx="10" fill="#f0f4fa"/>
+<rect x="350" y="45" width="340" height="690" rx="10" fill="#f3f7f6"/>
+<rect x="710" y="45" width="370" height="690" rx="10" fill="#f7f4f0"/>
+<text x="40" y="30" class="heading">화면 / 호출자</text><text x="370" y="30" class="heading">API / 처리기</text><text x="730" y="30" class="heading">종료 응답 / 데이터</text>
+<rect class="added" x="40" y="80" width="270" height="85" rx="10"/>
+<text x="55" y="105" class="heading">[추가] 삭제 확인 후 요청</text><text x="55" y="130">DELETE /api/documents/:id</text><text x="55" y="151" class="small">호출자: /documents/:id</text>
+<path class="edge" d="M310 115H390" marker-end="url(#route-arrow)"/>
+<path class="decision" d="M520 65L650 115L520 165L390 115Z"/><text x="520" y="120" text-anchor="middle">인증되었나?</text>
+<path class="edge" d="M650 115H750" marker-end="url(#route-arrow)"/><text x="686" y="102" class="small">아니오</text>
+<rect class="failure" x="750" y="85" width="300" height="60" rx="10"/><text x="770" y="122">401 · 로그인 필요</text>
+<path class="edge" d="M520 165V210" marker-end="url(#route-arrow)"/><text x="535" y="192" class="small">예</text>
+<path class="decision" d="M520 210L650 260L520 310L390 260Z"/><text x="520" y="265" text-anchor="middle">관리 권한이 있나?</text>
+<path class="edge" d="M650 260H750" marker-end="url(#route-arrow)"/><text x="686" y="247" class="small">아니오</text>
+<rect class="failure" x="750" y="230" width="300" height="60" rx="10"/><text x="770" y="267">403 · 삭제 거부</text>
+<path class="edge" d="M520 310V350" marker-end="url(#route-arrow)"/><text x="535" y="335" class="small">예</text>
+<rect class="node" x="390" y="350" width="260" height="65" rx="10"/><text x="410" y="378" class="heading">DocumentController</text><text x="410" y="402">.destroy · 문서 조회</text>
+<path class="edge" d="M520 415V445" marker-end="url(#route-arrow)"/>
+<path class="decision" d="M520 445L650 490L520 535L390 490Z"/><text x="520" y="495" text-anchor="middle">문서가 있나?</text>
+<path class="edge" d="M650 490H750" marker-end="url(#route-arrow)"/><text x="686" y="477" class="small">아니오</text>
+<rect class="failure" x="750" y="460" width="300" height="60" rx="10"/><text x="770" y="497">404 · 대상 없음</text>
+<path class="edge" d="M520 535V580" marker-end="url(#route-arrow)"/><text x="535" y="561" class="small">예</text>
+<rect class="added" x="390" y="580" width="260" height="70" rx="10"/><text x="410" y="610" class="heading">[추가] 문서 삭제</text><text x="410" y="636">DB 트랜잭션</text>
+<path class="edge" d="M650 615H750" marker-end="url(#route-arrow)"/>
+<rect class="node" x="750" y="580" width="300" height="70" rx="10"/><text x="770" y="607" class="heading">documents</text><text x="770" y="632">document_files · 삭제 / COMMIT</text>
+<path class="edge" d="M900 650V700H175V650" marker-end="url(#route-arrow)"/><text x="440" y="689" class="small">커밋 성공 → 204 No Content</text>
+<rect class="added" x="40" y="580" width="270" height="70" rx="10"/><text x="60" y="610" class="heading">[추가] 목록으로 이동</text><text x="60" y="636">/documents</text>
+</svg>
+</div>
+<p class="muted">읽는 법: 마름모는 판단, 화살표의 예/아니오는 조건, 붉은 상자는 실패 응답입니다. 이 가상 계약은 DB 행 삭제만 다룹니다. 실제 작업에서는 취소·파일 정리·예외 처리도 해당 소스에 있는 경로를 따라 표시합니다.</p>
+<details><summary>보조 자료 · 경로 계약과 소스 근거</summary><div class="support"><table><thead><tr><th>가상 경로</th><th>전후</th><th>응답</th><th>실제 작성 시 채울 근거</th></tr></thead><tbody><tr><td>DELETE /api/documents/:id</td><td>없음 → 문서 삭제</td><td>204 / 401 / 403 / 404</td><td>라우터·권한 검사·처리기 파일:줄, 실제 요청/검사 결과</td></tr></tbody></table></div><p>상태 코드와 파일 위치는 대상 프로젝트에서 확인해야 합니다. 이 예시에 실제 소스 위치나 실행 증거는 없습니다.</p></details>
+</section>
+<section id="erd-example">
+<h2>마이그레이션 · 테이블 관계의 전후 보기</h2>
+<p>가상 예시: 문서에 선택적 폴더 관계를 추가합니다. 선은 FK 필드에서 참조하는 PK 필드로 연결됩니다. 아래 마이그레이션은 실제 작성·실행되지 않았습니다.</p>
+<div class="diagram" role="region" aria-label="폴더 관계 추가 전후 ERD, 좁은 화면에서는 좌우로 스크롤" tabindex="0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 850" role="img" aria-labelledby="erd-title erd-desc">
+<title id="erd-title">folders 테이블과 documents.folder_id의 추가 전후 ERD</title>
+<desc id="erd-desc">이전에는 documents 하나에 document_files가 0개 이상 연결된다. 이후에도 이 관계는 유지되며 새 folders 테이블이 추가된다. 문서는 nullable folder_id로 폴더 0개 또는 1개에 연결되고, 폴더 하나에는 문서가 0개 이상 속한다. 폴더 삭제는 folder_id를 NULL로 바꾸고, 문서 삭제는 파일 행을 cascade 삭제한다.</desc>
+<rect x="20" y="20" width="1060" height="270" rx="12" fill="#f2f5f6"/>
+<text x="45" y="55" class="heading">이전 · 문서와 파일 관계</text>
+<rect class="node" x="60" y="85" width="300" height="150" rx="8"/>
+<text x="80" y="115" class="heading">documents</text><path class="edge" d="M60 130H360"/>
+<text x="80" y="158">PK  id : bigint</text><text x="80" y="198">title : text NOT NULL</text>
+<rect class="node" x="700" y="85" width="320" height="150" rx="8"/>
+<text x="720" y="115" class="heading">document_files</text><path class="edge" d="M700 130H1020"/>
+<text x="720" y="158">PK  id : bigint</text><text x="720" y="198">FK  document_id : bigint NOT NULL</text>
+<path class="edge" d="M700 193H525V153H360"/>
+<circle cx="700" cy="193" r="4" fill="#416b70"/><circle cx="360" cy="153" r="4" fill="#416b70"/>
+<text x="375" y="141">1</text><text x="643" y="181">0..N</text><text x="420" y="253" class="small">FK → documents.id · ON DELETE CASCADE</text>
+<rect x="20" y="320" width="1060" height="510" rx="12" fill="#f5faf7"/>
+<text x="45" y="355" class="heading">이후 · [추가] 선택적 폴더 관계</text>
+<rect class="added" x="60" y="385" width="300" height="150" rx="8"/>
+<text x="80" y="415" class="heading">[추가] folders</text><path class="new-edge" d="M60 430H360"/>
+<text x="80" y="458">PK  id : bigint</text><text x="80" y="498">name : text NOT NULL</text>
+<rect class="added" x="700" y="385" width="320" height="195" rx="8"/>
+<text x="720" y="415" class="heading">[변경] documents</text><path class="new-edge" d="M700 430H1020"/>
+<text x="720" y="458">PK  id : bigint</text><text x="720" y="498">title : text NOT NULL</text><text x="720" y="538">[추가] FK  folder_id : bigint NULL</text>
+<path class="new-edge" d="M700 533H525V453H360"/>
+<circle cx="700" cy="533" r="4" fill="#227d5b"/><circle cx="360" cy="453" r="4" fill="#227d5b"/>
+<text x="375" y="441">0..1</text><text x="643" y="521">0..N</text><text x="375" y="568" class="small">[추가] FK → folders.id</text><text x="375" y="592" class="small">ON DELETE SET NULL</text>
+<rect class="node" x="60" y="625" width="340" height="150" rx="8"/>
+<text x="80" y="655" class="heading">document_files · 유지</text><path class="edge" d="M60 670H400"/>
+<text x="80" y="698">PK  id : bigint</text><text x="80" y="738">FK  document_id : bigint NOT NULL</text>
+<path class="edge" d="M400 733H1060V453H1020"/>
+<circle cx="400" cy="733" r="4" fill="#416b70"/><circle cx="1020" cy="453" r="4" fill="#416b70"/>
+<text x="418" y="721">0..N</text><text x="1034" y="441">1</text><text x="565" y="723" class="small">유지 · FK → documents.id</text><text x="565" y="759" class="small">ON DELETE CASCADE</text>
+</svg>
+</div>
+<p><strong>관계 읽기:</strong> 폴더 하나에 문서 0개 이상(0..N), 문서 하나에 폴더 0개 또는 1개(0..1). 문서 하나에 파일 행 0개 이상, 파일 행 하나는 문서 1개에 속합니다.</p>
+<p class="muted">범례: 초록 + [추가]/[변경] = 이번 변경, 회색 + 유지 = 기존 관계. 실선은 이 예시에서 가정한 DB 외래 키입니다. 실제 FK가 없는 앱 수준 관계라면 점선과 명시적 설명을 사용합니다.</p>
+<p><strong>적용 상태:</strong> 설명용 가상 스키마 · 작성/로컬 적용/운영 적용 모두 해당 없음.<br><strong>가상 롤백의 손실:</strong> folder_id와 folders를 제거하면 폴더 분류 정보는 사라집니다. 문서·파일 행은 유지됩니다.</p>
+<details><summary>보조 자료 · 컬럼 변경 및 적용 순서</summary><div class="support"><table><thead><tr><th>대상</th><th>이전 → 이후</th><th>가상 배포 시 고려할 점</th></tr></thead><tbody><tr><td>folders</td><td>없음 → id PK, name NOT NULL</td><td>문서의 FK보다 먼저 생성</td></tr><tr><td>documents.folder_id</td><td>없음 → nullable FK, non-unique index</td><td>기존 문서는 NULL, 백필 없음. 스키마 적용 후 새 코드 배포</td></tr><tr><td>document_files.document_id</td><td>변경 없음 · NOT NULL FK</td><td>ON DELETE CASCADE는 파일 행에만 적용, 물리 파일 삭제를 뜻하지 않음</td></tr></tbody></table></div><p>실제 작업에서는 마이그레이션 파일:줄, 실행 기록, DB별 잠금 영향과 롤백 명령을 확인해 채웁니다. 예시의 배포 설명은 실행 증거가 아닙니다.</p></details>
+</section>
+</body>
+</html>

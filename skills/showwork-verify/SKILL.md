@@ -41,6 +41,8 @@ When a persistent evidence record is useful, follow project conventions or use a
 
 For a multi-layer change, use the companion guide's change-specific coverage table to connect routing, schema/migration and architecture explanations to their evidence. Separate authored migrations from migrations actually applied, and source-derived diagrams from runtime observations. Do not collapse verification of these areas into one aggregate test count.
 
+Check that routing diagrams connect meaningful branches to their actual responses, and schema ERDs connect FK/PK fields with cardinalities supported by constraints. A table or linear badge row alone does not explain a branching route or table relationships. Preserve unknowns and distinguish illustrative examples from the inspected system.
+
 Lead with the overall verified result and any blocking failure or gap. Include the relevant evidence, material limits, and the next concrete action needed for a failing or unverified criterion. Keep a trivial verification short. Do not claim completion while a required criterion remains failing or unverified, and do not silently start fixing after a verification-only request.
 
 When presenting an implementation handoff, use the [browser companion](../showwork/references/companion.md) in handoff mode to connect result visuals and the verified/failed/unverified criteria. This explanation has no approval button. Preserve a short chat summary and distinguish observed screenshots from explanatory diagrams.

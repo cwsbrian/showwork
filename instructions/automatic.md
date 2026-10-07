@@ -31,9 +31,14 @@ actual screenshots when available, before/after comparisons, a flow or diagram,
 and verification evidence and gaps. Read the same companion guide. Keep the
 visuals proportionate and distinguish observed output from explanatory mockups.
 Cover every materially changed area, not just the visible UI or a test count.
-For changed routing, include a request/navigation flow diagram and a route table;
-for schema/migrations, include before/after tables, data migration and rollback
-details, distinguishing authored migrations from ones actually executed;
+For changed routing, lead with a connected flow/sequence diagram showing actual
+branches, labeled conditions and responses; a row of badges/arrows is insufficient
+when the flow branches. Keep route tables and long source details secondary.
+For schema/migrations, lead with a before/after ERD of affected tables, PK/FK fields
+and labeled relationships/cardinalities, including unchanged related tables for
+context. Mark added/removed/changed elements; never invent missing relationships.
+Include schema comparison, data migration and rollback details, distinguishing
+authored migrations from ones actually executed;
 for changed architecture, show component boundaries, dependencies and data flow.
 Use concrete names from the diff, source locations, reasons and relevant evidence.
 Put detailed explanations in the browser; a short chat summary must not make the
