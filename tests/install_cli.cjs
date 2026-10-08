@@ -25,7 +25,14 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.ok(packed.files.every(({ path }) => !/(__pycache__|\.pyc$|\.showwork\/|node_modules\/)/.test(path)));
     const args = ['exec', '--yes', '--offline', '--package', join(temporary, packed.filename), '--', 'showwork'];
     writeFileSync(join(project, 'AGENTS.md'), 'Keep my instructions.\n');
-    assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 4/);
+    assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 5/);
+    for (const skillRoot of ['.agents/skills', '.claude/skills']) {
+      const review = join(project, skillRoot, 'showwork-adverial-review');
+      assert.equal(readFileSync(join(review, 'SKILL.md'), 'utf8'), readFileSync(join(root, 'skills/showwork-adverial-review/SKILL.md'), 'utf8'));
+      assert.ok(existsSync(join(review, 'references/mobile.md')));
+      assert.ok(existsSync(resolve(review, '../showwork-review/SKILL.md')));
+      assert.ok(existsSync(resolve(review, '../showwork/scripts/companion.py')));
+    }
     const claudeInstructions = readFileSync(join(project, '.claude/CLAUDE.md'), 'utf8');
     assert.ok(claudeInstructions.includes('.claude/skills/showwork/SKILL.md'));
     assert.ok(existsSync(join(project, '.claude/skills/showwork/assets/companion.html')));
@@ -92,7 +99,7 @@ test('the same npx command and cache pick up a new Git commit and update install
     commit();
     const args = ['--yes', '--cache', join(temporary, 'npm-cache'),
       `git+${pathToFileURL(repository).href}#main`, '--target', project];
-    assert.match(run('npx', args, project), /installed\/updated 4/);
+    assert.match(run('npx', args, project), /installed\/updated 5/);
     const installed = join(project, '.agents/skills/showwork');
     assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), 'First release');
     assert.ok(existsSync(join(installed, 'references/retired.md')));

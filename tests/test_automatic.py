@@ -30,7 +30,7 @@ class AutomaticTest(unittest.TestCase):
         self.assertEqual(context["hookEventName"], "UserPromptSubmit")
         self.assertNotIn(prompt, context["additionalContext"])
         self.assertNotIn("{{SKILLS_ROOT}}", context["additionalContext"])
-        for name in ["showwork", "showwork-plan", "showwork-review", "showwork-verify"]:
+        for name in ["showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review"]:
             self.assertIn(str(ROOT / "skills" / name / "SKILL.md"), context["additionalContext"])
 
     def test_ignores_unrelated_hook_events(self):

@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 
-SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify")
+SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review")
 SOURCE = Path(__file__).resolve().parents[1] / "skills"
 TEMPLATE = SOURCE.parent / "instructions" / "automatic.md"
 START = "<!-- showwork:automatic:start -->"

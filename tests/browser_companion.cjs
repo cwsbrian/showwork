@@ -43,10 +43,14 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.equal(events.events.at(-1).choice,'board');
   const handoff={mode:'handoff',title:'무엇이 바뀌었는지 함께 보기',summary:'선택할 때는 비교 화면을, 끝났을 때는 결과와 근거를 보여줍니다.',sections:[{kind:'explanation',title:'요청에서 결과까지',body:'명확한 작업은 바로 진행합니다. 선택이 필요한 지점에서만 비교안을 보여줍니다.',html:'<div style="display:grid;gap:12px"><div style="background:#eef4f1;padding:16px;border-radius:10px">요청 → 필요할 때만 시각적 선택</div><div style="text-align:center">↓</div><div style="background:#e9eff8;padding:16px;border-radius:10px">구현 · 검증 → 결과 설명</div></div>'}],checks:[{status:'verified',text:'키보드로 선택하고 결과 저장',evidence:'Chromium에서 방향키로 선택 후 제출, events 명령으로 board 기록 확인.'},{status:'unverified',text:'실제 사용자 앱의 시각적 품질',evidence:'이 화면은 companion 기능을 시험한 결과이며 별도 앱을 평가하지 않았습니다.'}]};
   handoff.sections.push({kind:'explanation',title:'라우팅 · 스키마 변경 설명 예시',body:'렌더링 검사용 예시입니다. 실제 앱의 변경이나 적용된 마이그레이션을 뜻하지 않습니다.',html:'<h2>변경된 필드 비교</h2><table><thead><tr><th>필드</th><th>이전</th><th>이후</th></tr></thead><tbody>'+Array.from({length:25},(_,i)=>`<tr><th>column_${i}</th><td>nullable</td><td>NOT NULL · 설명 예시</td></tr>`).join('')+'</tbody></table><details><summary>검증 명령 상세</summary><div style="height:400px">추가 검증 결과</div></details>'});
+  handoff.sections.push({kind:'observed',title:'리뷰 캡처 첨부 검사',body:'이번 검사에서 Chromium으로 촬영한 companion 화면입니다. 모바일 시뮬레이터 캡처가 아닙니다.',image:path.join(output,'decision.png')});
   publish(handoff);await page.getByRole('heading',{name:handoff.title}).waitFor();
   const detailed=page.locator('#section-1 iframe');
   await waitFor(async()=>await detailed.evaluate(frame=>frame.clientHeight>760));
-  assert.equal(await page.locator('#contents a').count(),2);
+  assert.equal(await page.locator('#contents a').count(),3);
+  const capture=page.locator('#section-2 img');
+  await waitFor(()=>capture.evaluate(img=>img.complete&&img.naturalWidth===1280));
+  assert.ok((await capture.getAttribute('src')).startsWith('/assets/'));
   const gridWidth=await page.locator('#sections').evaluate(e=>e.clientWidth);
   assert.ok((await detailed.boundingBox()).width>gridWidth-4,'Handoff diagrams use full width');
   const heightBefore=(await detailed.boundingBox()).height;
@@ -67,6 +71,6 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.deepEqual(errors,[]);
   server.kill('SIGINT');await waitFor(()=>server.exitCode!==null);
   await page.getByText('연결 끊김 · 마지막 화면').waitFor();
-  const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation'],screenshots:['decision.png','handoff.png','mobile.png']};
+  const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded'],screenshots:['decision.png','handoff.png','mobile.png']};
   fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server.exitCode===null)server.kill('SIGINT');await waitFor(()=>server.exitCode!==null).catch(()=>server.kill('SIGKILL'));fs.rmSync(temporary,{recursive:true,force:true});});

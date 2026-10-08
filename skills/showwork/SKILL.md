@@ -81,4 +81,4 @@ Open the page through the available browser tool or share its full local URL. Th
 
 ## Narrow requests
 
-For planning only, use [showwork-plan](../showwork-plan/SKILL.md). For a review without fixes, use [showwork-review](../showwork-review/SKILL.md). For checking an existing result, use [showwork-verify](../showwork-verify/SKILL.md). These modes preserve the user's requested scope; they are not mandatory extra steps or approval gates.
+For an explicitly requested adversarial review with a localhost report and mobile runtime captures, use [showwork-adverial-review](../showwork-adverial-review/SKILL.md). For planning only, use [showwork-plan](../showwork-plan/SKILL.md). For a review without fixes, use [showwork-review](../showwork-review/SKILL.md). For checking an existing result, use [showwork-verify](../showwork-verify/SKILL.md). These modes preserve the user's requested scope; they are not mandatory extra steps or approval gates.

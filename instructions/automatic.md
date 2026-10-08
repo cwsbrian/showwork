@@ -7,6 +7,9 @@ the request and affected code; ordinary conversation needs no workflow.
 Read the relevant skill before starting the task:
 - Implementation or bug fix: `{{SKILLS_ROOT}}/showwork/SKILL.md`.
 - Planning only: `{{SKILLS_ROOT}}/showwork-plan/SKILL.md`.
+- Adversarial review with a visual report (`adverial-review` or `adversarial-review`):
+  `{{SKILLS_ROOT}}/showwork-adverial-review/SKILL.md`. For mobile targets, follow its
+  simulator/emulator execution and screenshot evidence requirements.
 - Review only: `{{SKILLS_ROOT}}/showwork-review/SKILL.md`.
 - Verification only: `{{SKILLS_ROOT}}/showwork-verify/SKILL.md`.
 

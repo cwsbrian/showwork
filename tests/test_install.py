@@ -15,6 +15,21 @@ SPEC.loader.exec_module(INSTALLER)
 
 
 class InstallTest(unittest.TestCase):
+    def test_upgrade_adds_review_skill_for_both_runtimes_without_replacing_existing_skills(self):
+        for runtime, folder in [("codex", ".agents"), ("claude", ".claude")]:
+            with self.subTest(runtime=runtime), tempfile.TemporaryDirectory() as temporary:
+                project = Path(temporary)
+                previous = tuple(name for name in INSTALLER.SKILLS if name != "showwork-adverial-review")
+                with patch.object(INSTALLER, "SKILLS", previous):
+                    INSTALLER.install(project, runtime=runtime)
+                existing = project / folder / "skills/showwork/SKILL.md"
+                modified = existing.stat().st_mtime_ns
+                self.assertEqual(INSTALLER.install(project, runtime=runtime), 1)
+                self.assertEqual(existing.stat().st_mtime_ns, modified)
+                review = project / folder / "skills/showwork-adverial-review"
+                self.assertEqual(INSTALLER.contents(review), INSTALLER.contents(ROOT / "skills/showwork-adverial-review"))
+                self.assertEqual(INSTALLER.install(project, runtime=runtime), 0)
+
     def test_claude_user_install_update_preserves_settings_and_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -25,7 +40,7 @@ class InstallTest(unittest.TestCase):
             settings = config / "settings.json"
             settings.write_text('{"hooks":{"custom":[]}}')
             with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {"CLAUDE_CONFIG_DIR": str(config)}):
-                self.assertEqual(INSTALLER.install(runtime="claude"), 4)
+                self.assertEqual(INSTALLER.install(runtime="claude"), len(INSTALLER.SKILLS))
                 self.assertTrue(instructions.read_bytes().startswith(b"My Claude rules.\r\n"))
                 self.assertIn((config / "skills/showwork/SKILL.md").as_posix(), instructions.read_text())
                 self.assertEqual(INSTALLER.install(runtime="claude"), 0)
@@ -76,7 +91,7 @@ class InstallTest(unittest.TestCase):
             project = home / "project"
             project.mkdir()
             with patch.object(INSTALLER.Path, "home", return_value=home), patch.object(INSTALLER.os, "environ", {}):
-                self.assertEqual(INSTALLER.install(), 4)
+                self.assertEqual(INSTALLER.install(), len(INSTALLER.SKILLS))
                 instructions = home / ".codex" / "AGENTS.md"
                 self.assertIn((home / ".agents/skills/showwork/SKILL.md").as_posix(), instructions.read_text())
                 instructions.write_text("My global rules.\n" + instructions.read_text())
@@ -213,7 +228,7 @@ class InstallTest(unittest.TestCase):
     def test_install_repeat_conflict_and_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
-            self.assertEqual(INSTALLER.install(project), 4)
+            self.assertEqual(INSTALLER.install(project), len(INSTALLER.SKILLS))
             self.assertEqual(INSTALLER.install(project), 0)
             skills = project / ".agents" / "skills"
             for name in INSTALLER.SKILLS:
@@ -231,7 +246,7 @@ class InstallTest(unittest.TestCase):
             existing = project / ".agents" / "skills" / "showwork-verify"
             existing.mkdir(parents=True)
             (existing / "SKILL.md").write_text("User version", encoding="utf-8")
-            self.assertEqual(INSTALLER.install(project), 4)
+            self.assertEqual(INSTALLER.install(project), len(INSTALLER.SKILLS))
             backups = list((project / ".agents/showwork-backups").glob("update-*/showwork-verify/SKILL.md"))
             self.assertEqual(backups[-1].read_text(), "User version")
             self.assertTrue((project / "AGENTS.md").exists())

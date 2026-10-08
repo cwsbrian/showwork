@@ -50,7 +50,7 @@ npx --yes github:cwsbrian/showwork
 | Codex | `~/.agents/skills/showwork*` | `~/.codex/AGENTS.md` (활성 override 우선) |
 | Claude Code | `~/.claude/skills/showwork*` | `~/.claude/CLAUDE.md` |
 
-`CODEX_HOME`과 `CLAUDE_CONFIG_DIR`을 존중합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 열고 평소처럼 요청하세요. Claude는 `/showwork`, `/showwork-plan`, `/showwork-review`, `/showwork-verify`로 직접 호출할 수도 있습니다. 하나만 설치하려면 `--runtime codex` 또는 `--runtime claude`를 붙이세요.
+`CODEX_HOME`과 `CLAUDE_CONFIG_DIR`을 존중합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 열고 평소처럼 요청하세요. Claude는 `/showwork`, `/showwork-plan`, `/showwork-review`, `/showwork-verify`, `/showwork-adverial-review`로 직접 호출할 수도 있습니다. 하나만 설치하려면 `--runtime codex` 또는 `--runtime claude`를 붙이세요.
 
 [Codex 사용자 스킬](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [Claude 사용자 스킬](https://code.claude.com/docs/en/skills#choose-where-skills-load) · [Claude 사용자 지침](https://code.claude.com/docs/en/memory)
 
@@ -87,6 +87,7 @@ claude --plugin-dir /absolute/path/to/showwork
 /showwork:run 구독 취소 기능을 추가해줘
 /showwork:plan 구독 취소 기능의 동작과 구현 계획을 보여줘
 /showwork:review 현재 변경사항을 리뷰해줘
+/showwork:adverial-review 현재 변경사항을 반례 중심으로 리뷰해줘
 /showwork:verify 구현한 구독 취소 기능을 검증해줘
 ```
 
@@ -104,7 +105,7 @@ python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 구독 취소 기능을 추가해줘
 ```
 
-설치기는 네 스킬과 함께 사용자 지침에 자동 판단 규칙을 추가합니다. 프로젝트별 지침은 전역 지침보다 우선할 수 있습니다. 이제 `$showwork`를 붙이지 않아도 작업 규모와 요청 범위에 맞는 경로를 선택하도록 지시됩니다.
+설치기는 다섯 스킬과 함께 사용자 지침에 자동 판단 규칙을 추가합니다. 프로젝트별 지침은 전역 지침보다 우선할 수 있습니다. 이제 `$showwork`를 붙이지 않아도 작업 규모와 요청 범위에 맞는 경로를 선택하도록 지시됩니다.
 
 특정 모드를 직접 지정할 수도 있습니다.
 
@@ -112,10 +113,11 @@ python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 $showwork 구독 취소 기능을 추가해줘
 $showwork-plan 구독 취소 기능의 동작과 구현 계획을 보여줘
 $showwork-review 현재 변경사항을 리뷰해줘
+$showwork-adverial-review 현재 변경사항을 반례 중심으로 리뷰해줘
 $showwork-verify 구현한 구독 취소 기능을 검증해줘
 ```
 
-설치기는 각 도구의 스킬 경로에 네 스킬을 복사합니다. 같은 내용은 그대로 두고, 달라진 스킬은 기존 파일을 백업한 뒤 최신 내용으로 교체합니다. 직접 수정한 내용도 백업에 남습니다. 지침에서는 Showwork가 관리하는 블록만 갱신하며 다른 내용을 보존합니다. 네이티브 플러그인 매니페스트도 포함되어 있습니다. 이전 프로젝트 설치는 자동 삭제하지 않습니다. 중복 설치 정리와 업데이트 방법은 [설치 안내](docs/installation.md)를 참고하세요.
+설치기는 각 도구의 스킬 경로에 다섯 스킬을 복사합니다. 같은 내용은 그대로 두고, 달라진 스킬은 기존 파일을 백업한 뒤 최신 내용으로 교체합니다. 직접 수정한 내용도 백업에 남습니다. 지침에서는 Showwork가 관리하는 블록만 갱신하며 다른 내용을 보존합니다. 네이티브 플러그인 매니페스트도 포함되어 있습니다. 이전 프로젝트 설치는 자동 삭제하지 않습니다. 중복 설치 정리와 업데이트 방법은 [설치 안내](docs/installation.md)를 참고하세요.
 
 ## 요청에 맞는 모드
 
@@ -125,8 +127,23 @@ $showwork-verify 구현한 구독 취소 기능을 검증해줘
 | 계획 | 동작 예시, 중요한 결정, 구현 순서, 관찰 가능한 성공 조건 |
 | 리뷰 | 전체 변경 범위에서 찾은 재현 가능한 결함과 검증 공백 |
 | 검증 | 요구사항별로 입증된 동작, 실패, 미검증 사항 |
+| Adverial review | 반례 중심 리뷰 → 실행 증거·모바일 실제 캡처 → localhost 시각 보고서 |
 
 계획·리뷰·검증만 요청하면 해당 범위에서 작업합니다. 일반 개발 요청에는 자동 적용되도록 연결되어 있고, 관련 없는 대화에는 작업 절차를 만들지 않습니다. 작업 시작 시 선택한 경로를 짧게 알려줍니다. 새 앱이라도 단순하고 명확하면 미리보기나 승인 질문 없이 진행할 수 있습니다. 시각적 선택이 필요할 때는 문자 그림 대신 브라우저 비교안을 사용합니다. 모델이 지침을 따르는지를 강제로 증명하는 정책 엔진은 아닙니다.
+
+## 시각적 Adversarial Review
+
+명령 이름은 요청한 표기인 `adverial-review`를 사용합니다. 설치 방식에 맞춰 호출하세요.
+
+| 설치 방식 | 호출 예시 |
+| --- | --- |
+| npx 사용자 설치 · Claude Code | `/showwork-adverial-review 현재 변경사항을 리뷰해줘` |
+| npx 사용자 설치 · Codex | `$showwork-adverial-review 현재 변경사항을 리뷰해줘` |
+| Claude 플러그인 | `/showwork:adverial-review 현재 변경사항을 리뷰해줘` |
+
+변경 범위와 실제 호출 경로를 읽고, 권한·경계값·중복 동작·부분 실패 등 코드에 맞는 반례를 검토합니다. 결과는 심각도, 소스 위치, 재현 조건, 기대/실제 동작, 근거를 연결한 localhost 보고서로 보여줍니다. 수정은 별도 요청이 있을 때만 적용합니다.
+
+모바일 앱이면 대상 iOS Simulator/Android Emulator를 띄우고 **리뷰 대상 빌드 설치 → 앱 실행 → 관련 화면 조작 → 실제 스크린샷 첨부**를 수행합니다. 기기·OS·빌드·조작 내용과 캡처의 출처를 함께 표시합니다. 시뮬레이터·SDK·빌드 설정·조작 도구가 없으면 해당 단계를 미검증으로 남기고 가능한 코드 리뷰를 계속합니다. 웹의 모바일 뷰포트나 화면 목업은 네이티브 앱 캡처를 대체하지 않습니다.
 
 ## 브라우저에서 함께 보기
 
@@ -152,7 +169,7 @@ python3 /absolute/path/to/showwork/scripts/showwork.py init cancellation \
 
 기록 도구의 성공은 **증거가 수집됐다는 뜻**입니다. 요구사항을 충족하는지와 현재 코드에도 유효한지는 에이전트가 검토해야 합니다. 스킬은 이 도구 없이도 사용할 수 있습니다.
 
-## v0.3 범위와 검증
+## v0.4 범위와 검증
 
 이 버전은 공통 스킬, 두 런타임의 사용자 설치·업데이트, 플러그인 형식, 증거 기록 도구, 변경 영역별 상세 브라우저 설명을 제공합니다. Claude 사용자 설치는 CLAUDE.md 지침을 사용하고, 선택형 플러그인 로딩은 요청 훅을 사용합니다. Companion은 시각적 자료를 보여주는 도구입니다. 실제 앱의 브라우저 조작·스크린샷 수집·시뮬레이터 검증은 환경에 있는 도구로 수행하며, 입증하지 못한 요구사항은 미검증으로 보고합니다.
 
@@ -170,7 +187,7 @@ claude plugin validate . --strict
 commands/                   Claude의 짧은 명령
 hooks/hooks.json            Claude 요청별 자동 적용
 instructions/automatic.md   두 환경의 공통 자동 판단 지침
-skills/                     두 환경이 공유하는 네 스킬
+skills/                     두 환경이 공유하는 다섯 스킬
 skills/showwork/scripts/     로컬 브라우저 companion
 skills/showwork/assets/      선택·완료 설명 화면
 scripts/install_codex.py     사용자·프로젝트 스킬·지침 설치기
