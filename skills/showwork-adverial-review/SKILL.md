@@ -29,7 +29,7 @@ Use project-provided test accounts/data. A review does not authorize real purcha
 
 ## Publish the review on localhost
 
-Read the shared [browser companion guide](../showwork/references/companion.md). Reuse `../showwork/scripts/companion.py`, resolved from this skill directory. Write the handoff JSON and captures under the reviewed project's `.showwork/visual/`; start `serve --project /absolute/project` in a persistent tool session, then `publish --project /absolute/project --file /absolute/report.json`. Use `mode: "handoff"`, never decision mode. Open the full returned localhost URL and include it in the final response. If the server/browser is unavailable, retain the artifacts and report the precise limitation.
+Read the shared [browser companion guide](../showwork/references/companion.md). Reuse `../showwork/scripts/companion.py`, resolved from this skill directory. Run `companion.py path --project /absolute/project` first and write handoff JSON, captures and one-off scripts inside that returned temporary directory, never in the project; start `serve --project /absolute/project` in a persistent tool session, then `publish --project /absolute/project --file /absolute/report.json`. Use `mode: "handoff"`, never decision mode. Open the full returned localhost URL and include it in the final response. If the server/browser is unavailable, retain the artifacts and report the precise limitation.
 
 Build the page around the findings, not a generic feature tour:
 

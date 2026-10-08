@@ -23,7 +23,7 @@ The primary implementation/review agent owns scenario selection, browser or simu
 
 Delegate report JSON and static HTML/SVG authoring to a lower-cost subagent when the runtime supports model selection. Prefer **Codex Luna** (`gpt-6-luna` only when exposed by the runtime) and **Claude Haiku** (`model: "haiku"` on the native Agent invocation). An explicit user preference, such as Terra or Sonnet, overrides this default; resolve the actual available model identifier rather than guessing an alias. Do not change the main model, global subagent defaults, or user configuration. If delegation/model selection is unavailable or fails, disclose that limitation and author the report with the current agent; never claim the preferred model ran. Do not silently escalate to a different paid model.
 
-Give the renderer a bounded packet: finalized findings, changed names/relationships, source references, exact verification statuses and limitations, screenshot paths/provenance, page schema, and one output path under `.showwork/visual/`. Start with fresh context when supported (Codex model overrides may require `fork_turns: "none"`); do not pass the full review transcript. Limit ownership to that report artifact. No product edits, app control, additional agents, publishing, or commits. This delegation is only for presentation, not a second review.
+Give the renderer a bounded packet: finalized findings, changed names/relationships, source references, exact verification statuses and limitations, screenshot paths/provenance, page schema, and one output path inside the temporary directory returned by `companion.py path --project ...`. Start with fresh context when supported (Codex model overrides may require `fork_turns: "none"`); do not pass the full review transcript. Limit ownership to that report artifact. No product edits, app control, additional agents, publishing, or commits. This delegation is only for presentation, not a second review.
 
 The primary agent checks the returned facts against the packet, validates the JSON with the existing publisher, then inspects the rendered report for omissions, clipping, unreadable labels and image access before sharing it. Correct presentation defects without altering evidence. Record the requested/actually used renderer and any fallback in the handoff. Model selection is runtime-dependent instruction, not a guarantee enforced by the static server; do not claim measured savings without measurements.
 
@@ -31,13 +31,21 @@ Model selection references: [Codex subagent configuration](https://learn.chatgpt
 
 ## Start the browser
 
+First get the temporary artifact directory (the command creates it outside the project):
+
+```bash
+SHOWWORK_VISUAL=$(python3 /absolute/path/to/showwork/scripts/companion.py path --project /absolute/project)
+```
+
+Use this returned absolute path for report JSON, screenshots and disposable scripts. On POSIX it is `/tmp/showwork-<uid>/<project-path-hash>/visual`; on Windows it uses the OS temporary folder. Each user gets a private directory and each resolved project path gets a separate folder. Never create `.showwork/` or report artifacts in the project.
+
 Run through the environment's persistent shell/session mechanism:
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/companion.py serve --project /absolute/project
 ```
 
-Here `showwork` means the **skill folder**, e.g. `<project>/.agents/skills/showwork`, not the plugin root. The server stays in the foreground; keep the tool session alive rather than detaching a process the host may reap. It prints JSON containing `url`, `pid`, and `project`; connection info also lives at `<project>/.showwork/visual/server.json`. Check that the server responds before reusing old info. Restarting gives a new URL/key. Stop the owning terminal process with Ctrl-C when the walkthrough is no longer needed.
+Here `showwork` means the **skill folder**, e.g. `<project>/.agents/skills/showwork`, not the plugin root. The server stays in the foreground; keep the tool session alive rather than detaching a process the host may reap. It prints JSON containing `url`, `pid`, `project`, and `directory`; connection info also lives at `server.json` inside the returned temporary directory. Check that the server responds before reusing old info. Restarting gives a new URL/key. Stop the owning terminal process with Ctrl-C when the walkthrough is no longer needed.
 
 Open the full `url` using an available browser-opening tool such as `open_in_codex`, and include that clickable URL in chat. In a local desktop environment, `serve --open` can open the system browser instead. Do not require another permission question to show a visual already needed for the authorized task. This server binds only to `127.0.0.1`; a remote user's browser may need the environment's existing port forwarding. Do not pretend a local URL is reachable from another machine.
 
@@ -47,10 +55,10 @@ Author a JSON file, then run:
 
 ```bash
 python3 /absolute/skill/showwork/scripts/companion.py publish \
-  --project /absolute/project --file /absolute/project/.showwork/visual/handoff-source.json
+  --project /absolute/project --file "$SHOWWORK_VISUAL/handoff-source.json"
 ```
 
-The open browser updates automatically. Every publish creates a new version. Keep source files and screenshots under `.showwork/visual/` so project source remains separate. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
+The open browser updates automatically. Every publish creates a new version. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
 
 ### Decision page
 
@@ -118,4 +126,4 @@ If only a label changed, explain that label change briefly; do not invent databa
 
 ## Limits
 
-The page and events stay local under `.showwork/visual/`. The full session URL carries a private key. Browser choices do not run code or edit product files. There is no telemetry, external API, or image-generation service. If the local browser cannot be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.
+The page and events stay in temporary storage, outside the project. They may disappear when the OS cleans `/tmp` or after a restart; regenerate missing reports. Stop the server before removing its reported directory when finished. Do not remove other projects' temporary folders. Existing project `.showwork/` folders are not automatically migrated or deleted; inspect and move them to temporary storage if requested. The full session URL carries a private key. Browser choices do not run code or edit product files. There is no telemetry, external API, or image-generation service. If the local browser cannot be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.

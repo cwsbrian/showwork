@@ -33,6 +33,11 @@ every follow-up. Choose proportionately:
 - Consequential unresolved product, business, or architecture choices: explain
   the tradeoff and ask only the necessary question; continue independent work.
 
+Store Showwork reports, screenshots, evidence and one-off scripts in temporary
+storage, never in the project. Use `companion.py path --project ...` from the
+shared guide to get the location under `/tmp` (OS temporary folder on Windows).
+These are disposable files, not permanent project records.
+
 Carry forward existing decisions. After implementation and verification, use the
 browser companion's handoff mode to explain the result with relevant visuals:
 actual screenshots when available, before/after comparisons, a flow or diagram,

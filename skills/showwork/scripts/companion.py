@@ -17,6 +17,9 @@ import tempfile
 from urllib.parse import parse_qs, unquote, urlsplit
 import webbrowser
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from runtime import workspace
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "companion.html"
 MAX_BODY = 2 * 1024 * 1024
@@ -24,7 +27,7 @@ IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def directory(project):
-    return Path(project).expanduser().resolve() / ".showwork" / "visual"
+    return workspace(project) / "visual"
 
 
 def save_json(path, value):
@@ -223,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     sub = cli.add_subparsers(dest="action", required=True)
-    for name in ["serve", "publish", "events"]:
+    for name in ["path", "serve", "publish", "events"]:
         command = sub.add_parser(name)
         command.add_argument("--project", required=True, type=Path)
         if name == "serve":
@@ -235,7 +238,11 @@ def main():
     try:
         if not args.project.is_dir():
             raise ValueError("Project must be an existing directory")
-        if args.action == "publish":
+        if args.action == "path":
+            root = directory(args.project)
+            root.mkdir(exist_ok=True)
+            print(root)
+        elif args.action == "publish":
             page = publish(args.project, args.file)
             print(json.dumps({"published": page["version"], "mode": page["mode"]}))
         elif args.action == "events":
@@ -246,7 +253,7 @@ def main():
             print(json.dumps({"version": current["version"], "events": [item for item in events if item["version"] == current["version"]]}, ensure_ascii=False))
         else:
             with CompanionServer(args.project, args.port) as server:
-                info = {"url": server.url, "pid": os.getpid(), "project": str(args.project.resolve())}
+                info = {"url": server.url, "pid": os.getpid(), "project": str(args.project.resolve()), "directory": str(server.root)}
                 save_json(server.root / "server.json", info)
                 print(json.dumps(info), flush=True)
                 if args.open:

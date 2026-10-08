@@ -36,7 +36,7 @@ Use the project's UI tests or available emulator interaction tools to reach the 
 
 ## Capture evidence, not a mock phone
 
-- Save real PNG/JPEG captures under `.showwork/visual/` with scenario-specific names. Check command success and decode/view each image; a blank, lock, splash or unrelated screen is not evidence of the reviewed flow. Record any such failure honestly.
+- Save real PNG/JPEG captures inside the temporary directory returned by `companion.py path --project ...`, outside the project with scenario-specific names. Check command success and decode/view each image; a blank, lock, splash or unrelated screen is not evidence of the reviewed flow. Record any such failure honestly.
 - Reproduce the relevant interaction before capturing its result. Include before/action/after captures when needed to demonstrate a transition. A still image proves appearance at a moment, not persistence, network correctness or the entire interaction; pair it with observed steps/logs/tests.
 - Record device/OS, reviewed app/build, timestamp, scenario/actions, expected/actual result and finding ID in each section's body. Use synthetic test data; do not expose credentials or private user records in the report.
 - Attach the actual file with `kind: "observed"` and `image: "scenario.png"` (relative to the handoff JSON), then publish with the shared companion. It copies the image into its local served assets. Inspect it in the resulting page.

@@ -69,7 +69,7 @@ Discover available tools before declaring them missing. If an environment or too
 
 Tie each important acceptance criterion to observed evidence. Record the command or action, relevant outcome, and location of any useful artifact. Evaluate whether it demonstrates the criterion; an exit code or evidence attachment is not semantic acceptance. After edits, rerun checks whose evidence may be stale and identify unrelated pre-existing failures.
 
-For work that benefits from a durable record, use existing project conventions or a concise criterion/evidence table. If this skill is used from the Showwork repository or plugin bundle and the optional [evidence helper](../../scripts/showwork.py) exists, it can record runs under `.showwork/runs/`. Resolve that script relative to this file, run it with the target project as the working directory, and read its `--help` before use. The helper records observations; the agent still judges acceptance. No helper is required.
+Keep generated reports, captures, one-off scripts and evidence in temporary storage, never in the project. If this skill is used from the Showwork repository or plugin bundle and the optional [evidence helper](../../scripts/showwork.py) exists, it can record runs in private temporary storage under `/tmp` (the OS temporary folder on Windows). Resolve that script relative to this file, run it with the target project as the working directory, and read its `--help` before use. The helper records observations; the agent still judges acceptance. No helper is required.
 
 ### Explain
 

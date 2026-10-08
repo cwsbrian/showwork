@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -16,9 +17,26 @@ class EvidenceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="showwork test ")
         self.addCleanup(self.temp.cleanup)
         self.project = Path(self.temp.name)
-        self.run = self.project / ".showwork" / "runs" / "checkout"
         result = self.cli("init", "checkout", "--title", "Checkout", "--criterion", "A purchase succeeds")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.run = Path(result.stdout.splitlines()[0])
+        self.addCleanup(shutil.rmtree, self.run.parent.parent)
+
+    def test_records_stay_outside_project_and_project_root_override_is_rejected(self):
+        self.assertFalse(self.run.is_relative_to(self.project))
+        self.assertEqual(list(self.project.iterdir()), [])
+        if os.name == 'posix':
+            self.assertTrue(self.run.is_relative_to(Path('/tmp').resolve()))
+        result = self.cli('init', 'bad', '--title', 'Bad', '--criterion', 'Test', '--root', self.project / '.showwork')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(list(self.project.iterdir()), [])
+
+    def test_legacy_project_run_is_rejected_before_writing_logs(self):
+        legacy = self.project / '.showwork' / 'runs' / 'checkout'
+        shutil.copytree(self.run, legacy)
+        result = self.cli('check', legacy, '--criterion', 'C1', '--', sys.executable, '-c', 'print("no")')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(list((legacy / 'evidence').iterdir()), [])
 
     def cli(self, *arguments):
         return subprocess.run(

@@ -2,12 +2,15 @@ import copy
 from http.cookiejar import CookieJar
 from importlib.util import module_from_spec, spec_from_file_location
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import build_opener, HTTPCookieProcessor, Request, urlopen
 
@@ -45,7 +48,41 @@ class CompanionTest(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=3)
+        shutil.rmtree(self.server.root.parent)
         self.temp.cleanup()
+
+    def test_temporary_path_is_stable_private_and_does_not_write_project(self):
+        result = subprocess.run([sys.executable, str(SCRIPT), 'path', '--project', str(self.project)],
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()), self.server.root)
+        self.assertFalse(self.server.root.is_relative_to(self.project))
+        self.assertEqual(list(self.project.iterdir()), [])
+        self.assertEqual(COMPANION.directory(self.project / '.'), self.server.root)
+        if os.name == 'posix':
+            self.assertTrue(self.server.root.is_relative_to(Path('/tmp').resolve()))
+            self.assertEqual(self.server.root.parent.stat().st_mode & 0o777, 0o700)
+        with tempfile.TemporaryDirectory() as other:
+            other_root = COMPANION.directory(other)
+            self.addCleanup(shutil.rmtree, other_root.parent)
+            self.assertNotEqual(other_root, self.server.root)
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX permissions and symlinks')
+    def test_temporary_storage_refuses_symlink_or_public_root(self):
+        import runtime
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / f'showwork-{os.getuid()}'
+            with patch.object(runtime, 'temporary_root', return_value=base):
+                root.symlink_to(self.project, target_is_directory=True)
+                with self.assertRaises(ValueError):
+                    COMPANION.directory(self.project)
+                root.unlink()
+                root.mkdir(mode=0o755)
+                root.chmod(0o755)
+                with self.assertRaises(ValueError):
+                    COMPANION.directory(self.project)
+        self.assertEqual(list(self.project.iterdir()), [])
 
     def publish(self, page):
         source = self.project / "page-source.json"

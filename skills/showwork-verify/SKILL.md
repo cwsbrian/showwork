@@ -37,7 +37,7 @@ For each important criterion, record the command or action, expected behavior, o
 
 A zero exit code means that command succeeded, not that every product requirement was met. A mock proves only the behavior within the mock's boundary. An attached screenshot or manual note needs interpretation and clear provenance; do not claim to have witnessed an action someone else reported. Describe limitations when a narrower check leaves part of a criterion open.
 
-When a persistent evidence record is useful, follow project conventions or use a concise table. The optional Showwork [evidence helper](../../scripts/showwork.py), when present in the repository or plugin bundle, records runs under `.showwork/runs/`. Resolve the script relative to this file, run it with the target project as the working directory, and inspect `--help` before using it. Its recorded results and attachment presence do not establish semantic acceptance. The skill works without the helper.
+Keep generated verification records in temporary storage, never in the project. The optional Showwork [evidence helper](../../scripts/showwork.py), when present in the repository or plugin bundle, records runs in private temporary storage under `/tmp` (the OS temporary folder on Windows). Resolve the script relative to this file, run it with the target project as the working directory, and inspect `--help` before using it. Its recorded results and attachment presence do not establish semantic acceptance. The skill works without the helper.
 
 ## Report the result honestly
 

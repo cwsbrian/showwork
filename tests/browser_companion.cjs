@@ -10,11 +10,10 @@ const {chromium} = require('playwright');
 const root = path.resolve(__dirname, '..');
 const script = path.join(root, 'skills/showwork/scripts/companion.py');
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'showwork-browser-'));
-const output = path.join(root, '.showwork/visual-test');
-fs.mkdirSync(output, {recursive:true});
+const output = fs.mkdtempSync(path.join(os.tmpdir(), 'showwork-visual-test-'));
 const python = process.env.PYTHON || 'python3';
 const server = spawn(python, [script, 'serve', '--project', temporary]);
-let browser;
+let browser, runtimeDirectory;
 function publish(document) {
   const source = path.join(temporary, 'source.json'); fs.writeFileSync(source, JSON.stringify(document));
   const result = spawnSync(python, [script, 'publish', '--project', temporary, '--file', source], {encoding:'utf8'});
@@ -24,6 +23,8 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
 
 (async()=>{
   const info = await new Promise((resolve,reject)=>{let buffer='';server.stdout.on('data',chunk=>{buffer+=chunk;if(buffer.includes('\n'))resolve(JSON.parse(buffer.split('\n')[0]));});server.once('error',reject);server.once('exit',code=>reject(Error('Server exited '+code)));setTimeout(()=>reject(Error('Server did not start')),5000).unref();});
+  runtimeDirectory=info.directory;
+  assert.equal(fs.existsSync(path.join(temporary,'.showwork')),false);
   const decision={mode:'decision',title:'할 일, 어떤 모습이 더 편한가요?',summary:'선택 기능의 테스트 화면입니다. 실제 제품에 대한 승인 요청이 아닙니다.',question:'목록을 읽는 방식만 비교합니다.',options:[
     {id:'list',title:'간결한 목록',body:'할 일을 한 줄씩 빠르게 훑어봅니다.',html:'<div style="background:#eef4f1;padding:24px;border-radius:12px"><h2>오늘의 할 일</h2><p>☐ 장보기</p><p>☑ 운동하기</p><p style="color:#647">+ 할 일 추가</p></div>'},
     {id:'board',title:'상태별 보드',body:'해야 할 일과 완료한 일을 나눠 봅니다.',html:'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><section style="background:#eef4f1;border-radius:12px;padding:18px"><h3>할 일</h3><p>장보기</p></section><section style="background:#e9eff8;border-radius:12px;padding:18px"><h3>완료</h3><p>운동하기</p></section></div><script>parent.__unsafe=true</script>'}
@@ -88,5 +89,5 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   server.kill('SIGINT');await waitFor(()=>server.exitCode!==null);
   await page.getByText('연결 끊김 · 마지막 화면').waitFor();
   const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','image decision selection without navigation','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded','keyboard original image access with authenticated full-resolution popup'],screenshots:['decision.png','handoff.png','mobile.png']};
-  fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
-})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server.exitCode===null)server.kill('SIGINT');await waitFor(()=>server.exitCode!==null).catch(()=>server.kill('SIGKILL'));fs.rmSync(temporary,{recursive:true,force:true});});
+  fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,output},null,2));
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server.exitCode===null)server.kill('SIGINT');await waitFor(()=>server.exitCode!==null).catch(()=>server.kill('SIGKILL'));if(runtimeDirectory)fs.rmSync(path.dirname(runtimeDirectory),{recursive:true,force:true});fs.rmSync(temporary,{recursive:true,force:true});});

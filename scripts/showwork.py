@@ -17,6 +17,9 @@ import tempfile
 from datetime import datetime, timezone
 from uuid import uuid4
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'showwork' / 'scripts'))
+from runtime import temporary_root, workspace
 
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -46,6 +49,8 @@ def read_run(directory):
         raise ValueError("Run has no acceptance criteria")
     if not isinstance(run.get("evidence"), list):
         raise ValueError("Run evidence must be a list")
+    if not directory.is_relative_to(temporary_root()) or directory.is_relative_to(Path(run['workspace']).resolve()):
+        raise ValueError('Move legacy evidence to temporary storage outside the project before using it')
     return run
 
 
@@ -91,7 +96,10 @@ def init_run(args):
         raise ValueError("Use a lowercase slug such as order-cancellation")
     if not args.title.strip() or any(not value.strip() for value in args.criterion):
         raise ValueError("Title and acceptance criteria cannot be blank")
-    directory = args.root.expanduser().resolve() / args.slug
+    root = args.root.expanduser().resolve() if args.root else workspace(Path.cwd()) / 'runs'
+    if not root.is_relative_to(temporary_root()) or root.is_relative_to(Path.cwd().resolve()):
+        raise ValueError('Evidence root must be in temporary storage outside the project')
+    directory = root / args.slug
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "evidence").mkdir()
     run = {
@@ -272,7 +280,7 @@ def parser():
     init.add_argument("slug")
     init.add_argument("--title", required=True)
     init.add_argument("--criterion", action="append", required=True)
-    init.add_argument("--root", type=Path, default=Path(".showwork/runs"))
+    init.add_argument("--root", type=Path, help="Optional temporary root outside the project; defaults to private /tmp storage")
     run = sub.add_parser("check", help="Capture a command: check RUN --criterion C1 -- COMMAND ...")
     run.add_argument("run", type=Path)
     run.add_argument("--criterion", required=True)

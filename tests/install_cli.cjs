@@ -32,6 +32,11 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
       assert.ok(existsSync(join(review, 'references/mobile.md')));
       assert.ok(existsSync(resolve(review, '../showwork-review/SKILL.md')));
       assert.ok(existsSync(resolve(review, '../showwork/scripts/companion.py')));
+      const directory = ok(run(process.env.PYTHON || 'python3', [resolve(review, '../showwork/scripts/companion.py'), 'path', '--project', project])).trim();
+      assert.ok(!directory.startsWith(project + '/'));
+      assert.equal(existsSync(join(project, '.showwork')), false);
+      assert.equal(existsSync(resolve(review, '../showwork/scripts/__pycache__')), false);
+      rmSync(resolve(directory, '..'), {recursive:true, force:true});
     }
     const claudeInstructions = readFileSync(join(project, '.claude/CLAUDE.md'), 'utf8');
     assert.ok(claudeInstructions.includes('.claude/skills/showwork/SKILL.md'));

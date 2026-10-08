@@ -10,30 +10,32 @@ Python 3.11 이상이 필요합니다. 표준 라이브러리만 사용합니다
 
 ```bash
 SHOWWORK_REPO=/absolute/path/to/showwork
-python3 "$SHOWWORK_REPO/scripts/showwork.py" init smoke \
+SHOWWORK_RUN=$(python3 "$SHOWWORK_REPO/scripts/showwork.py" init smoke \
   --title "CLI 기록 기능 확인" \
   --criterion "Python 실행 결과가 파일로 남는다" \
-  --criterion "관찰 기록을 첨부할 수 있다"
+  --criterion "관찰 기록을 첨부할 수 있다" | head -n 1)
 
-python3 "$SHOWWORK_REPO/scripts/showwork.py" check .showwork/runs/smoke \
+python3 "$SHOWWORK_REPO/scripts/showwork.py" check "$SHOWWORK_RUN" \
   --criterion C1 -- python3 -c 'print("hello from the runtime")'
 
-python3 -c 'from pathlib import Path; Path("observation.txt").write_text("Observed the CLI output locally.\n")'
-python3 "$SHOWWORK_REPO/scripts/showwork.py" attach .showwork/runs/smoke \
-  --criterion C2 --kind manual --path observation.txt \
+printf 'Observed the CLI output locally.\n' > "$SHOWWORK_RUN/observation.txt"
+python3 "$SHOWWORK_REPO/scripts/showwork.py" attach "$SHOWWORK_RUN" \
+  --criterion C2 --kind manual --path "$SHOWWORK_RUN/observation.txt" \
   --note "기록 도구 사용 예시이며 제품 기능의 증거는 아님"
 
-python3 "$SHOWWORK_REPO/scripts/showwork.py" status .showwork/runs/smoke
+python3 "$SHOWWORK_REPO/scripts/showwork.py" status "$SHOWWORK_RUN"
 ```
 
-`init`의 각 `--criterion`은 순서대로 `C1`, `C2` 등의 식별자를 받습니다. 같은 실행 이름을 덮어쓰지 않습니다. 새 작업이나 별도 검증에는 새 이름을 사용하세요.
+`SHOWWORK_RUN`은 `init`의 첫 줄에 나온 임시 경로입니다. 실제 검사 예시에서도 해당 작업의 경로를 사용하세요.
+
+`init`의 각 `--criterion`은 순서대로 `C1`, `C2` 등의 식별자를 받습니다. 예전 프로젝트 안의 기록을 계속 쓰려면 먼저 프로젝트 밖 임시 폴더로 옮기세요. 원래 프로젝트 경로는 기록 안에 남아 있어 검사 명령은 그곳에서 실행됩니다. 같은 실행 이름을 덮어쓰지 않습니다. 새 작업이나 별도 검증에는 새 이름을 사용하세요.
 
 ## 실제 검사를 기록하기
 
 `check`에서 `--` 뒤에 프로젝트의 실제 검사 명령과 인자를 넣습니다. 옵션은 `--` 앞에 둡니다.
 
 ```bash
-python3 "$SHOWWORK_REPO/scripts/showwork.py" check .showwork/runs/cancellation \
+python3 "$SHOWWORK_REPO/scripts/showwork.py" check "$SHOWWORK_RUN" \
   --criterion C1 --timeout 120 -- npm test -- --runInBand
 ```
 
@@ -48,7 +50,7 @@ python3 "$SHOWWORK_REPO/scripts/showwork.py" check .showwork/runs/cancellation \
 ## 화면·API·관찰 자료 연결하기
 
 ```bash
-python3 "$SHOWWORK_REPO/scripts/showwork.py" attach .showwork/runs/cancellation \
+python3 "$SHOWWORK_REPO/scripts/showwork.py" attach "$SHOWWORK_RUN" \
   --criterion C1 --kind screenshot --path /absolute/path/to/actual-screen.png \
   --note "직접 실행한 취소 완료 화면. 다음 결제 중단 안내와 접근 종료일을 확인함"
 ```
@@ -67,4 +69,4 @@ python3 "$SHOWWORK_REPO/scripts/showwork.py" attach .showwork/runs/cancellation 
 
 **`0`은 제품의 완료 판정이 아닙니다.** 수동 메모만으로도 증거 유무는 채워질 수 있습니다. 관련 없는 명령이 성공할 수도 있습니다. 에이전트는 기록을 읽어 요구사항을 실제로 입증하는지 평가해야 합니다. 이후 코드가 바뀌었는지도 자동 감지하지 않으므로 영향을 받는 검사는 다시 실행하세요.
 
-결과물은 `.showwork/runs/<이름>/run.json`과 `evidence/`입니다. 해시는 실수로 파일이 바뀐 것을 확인하는 용도이며, 위변조를 막는 서명은 아닙니다. 공유 전에 로그와 캡처에 포함된 정보를 확인하세요. 이 저장소는 `.showwork/`를 Git에서 제외합니다. 다른 프로젝트에서는 해당 프로젝트의 저장·공유 규칙을 따르세요.
+결과물은 `init`이 출력한 임시 폴더의 `run.json`과 `evidence/`입니다. 기본 경로는 `/tmp/showwork-<uid>/<프로젝트 경로 해시>/runs/<이름>`이며 Windows에서는 운영체제의 임시 폴더를 사용합니다. 프로젝트 폴더에는 기록을 만들지 않습니다. `--root`도 프로젝트 밖의 임시 폴더만 허용합니다. 해시는 실수로 파일이 바뀐 것을 확인하는 용도이며, 위변조를 막는 서명은 아닙니다. 공유 전에 로그와 캡처에 포함된 정보를 확인하세요. 이 자료는 일회성이며 운영체제가 정리하면 사라질 수 있습니다. 검사가 끝나고 필요 없을 때 해당 실행 폴더만 지우세요.
