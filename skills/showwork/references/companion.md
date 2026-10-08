@@ -7,6 +7,18 @@ Use this bundled companion for two distinct moments:
 
 The companion uses Python 3.11+ with no third-party runtime dependencies. It works both in the plugin bundle and a copied Codex skill: resolve `../scripts/companion.py` relative to this guide (inside the `showwork` skill). Always pass the target project's absolute path with `--project`.
 
+## Delegate presentation, retain evidence ownership
+
+The primary implementation/review agent owns scenario selection, browser or simulator operation, screenshot capture, and expected-versus-observed judgments. For mobile, follow the adversarial review's simulator/emulator evidence requirements. A presentation agent must not operate the application, collect replacement evidence, change findings/severity, or turn unverified checks into passes.
+
+Delegate report JSON and static HTML/SVG authoring to a lower-cost subagent when the runtime supports model selection. Prefer **Codex Luna** (`gpt-6-luna` only when exposed by the runtime) and **Claude Haiku** (`model: "haiku"` on the native Agent invocation). An explicit user preference, such as Terra or Sonnet, overrides this default; resolve the actual available model identifier rather than guessing an alias. Do not change the main model, global subagent defaults, or user configuration. If delegation/model selection is unavailable or fails, disclose that limitation and author the report with the current agent; never claim the preferred model ran. Do not silently escalate to a different paid model.
+
+Give the renderer a bounded packet: finalized findings, changed names/relationships, source references, exact verification statuses and limitations, screenshot paths/provenance, page schema, and one output path under `.showwork/visual/`. Start with fresh context when supported (Codex model overrides may require `fork_turns: "none"`); do not pass the full review transcript. Limit ownership to that report artifact. No product edits, app control, additional agents, publishing, or commits. This delegation is only for presentation, not a second review.
+
+The primary agent checks the returned facts against the packet, validates the JSON with the existing publisher, then inspects the rendered report for omissions, clipping, unreadable labels and image access before sharing it. Correct presentation defects without altering evidence. Record the requested/actually used renderer and any fallback in the handoff. Model selection is runtime-dependent instruction, not a guarantee enforced by the static server; do not claim measured savings without measurements.
+
+Model selection references: [Codex subagent configuration](https://learn.chatgpt.com/docs/config-file/config-reference) and [Claude subagent model selection](https://code.claude.com/docs/en/sub-agents#choose-a-model). Runtime capabilities take precedence over example identifiers.
+
 ## Start the browser
 
 Run through the environment's persistent shell/session mechanism:
@@ -63,6 +75,8 @@ Each section requires `title`, `body`, one visual (`html` or `image`), and `kind
 - `proposal`: a proposed follow-up, explicitly not implemented.
 
 Use inline SVG/HTML for diagrams, or `image` for an existing PNG/JPEG/WebP/GIF path relative to the JSON source. HTML renders in a sandboxed frame without scripts or external network resources. It is a visual aid, not a full running-app embed. Capture the real app separately when validating interactions. Never label a recreated mockup as an observed screenshot.
+
+Image sections keep a compact preview and an accessible original-image link that opens a new tab. Use browser-native image zoom to read tall captures; verify the original loads through the companion's authenticated asset route. Decision option images remain selection targets.
 
 Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), and `evidence` (the observed command/result/artifact location, or the precise limitation). Preserve failures and missing evidence. These labels are authored by the agent; the companion does not validate product correctness.
 

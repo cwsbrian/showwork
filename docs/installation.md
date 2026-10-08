@@ -1,6 +1,6 @@
 # Showwork 설치와 업데이트
 
-Showwork 0.4.0은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
+Showwork 0.4.1은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
 
 ## 설치·업데이트는 같은 명령
 

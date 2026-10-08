@@ -47,8 +47,13 @@
     const $ = id => document.getElementById(id);
     let page = null, selected = null, connected = false, observers = [];
     function text(tag, content, className) { const e = document.createElement(tag); e.textContent = content; if(className) e.className=className; return e; }
-    function visual(item) {
-      if(item.image) { const img=document.createElement('img'); img.className='visual-image'; img.src=item.image; img.alt=item.title; return img; }
+    function visual(item, openOriginal=false) {
+      if(item.image) {
+        const img=document.createElement('img'); img.className='visual-image'; img.src=item.image; img.alt=item.title;
+        if(!openOriginal) return img;
+        const wrapper=document.createElement('div');const link=text('a',item.title+' · 원본 이미지 열기 (새 탭)','card-copy');
+        link.href=item.image;link.target='_blank';link.rel='noopener';link.style.display='block';wrapper.append(img,link);return wrapper;
+      }
       const frame=document.createElement('iframe'); frame.title=item.title; frame.setAttribute('sandbox','allow-same-origin');
       frame.srcdoc='<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:24px;font:15px/1.5 system-ui;color:#172f34;box-sizing:border-box;overflow-wrap:anywhere}*{box-sizing:border-box}svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d9e3e0;vertical-align:top}pre{white-space:pre-wrap}summary{cursor:pointer}</style>'+item.html;
       frame.onload=()=>{ try { const body=frame.contentDocument.body;const resize=()=>{const height=Math.max(260,Math.ceil(body.getBoundingClientRect().height)+2);frame.style.height=(page.mode==='handoff'?height:Math.min(760,height))+'px';};resize();const observer=new ResizeObserver(resize);observer.observe(body);observers.push(observer); } catch{} }; return frame;
@@ -77,7 +82,7 @@
         });
       }
       const kinds={proposal:'구현 전 제안',observed:'실행 결과 · 작성자가 관찰',explanation:'이해를 위한 설명'};
-      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id='section-'+index;const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div',kinds[item.kind],'tag'),text('h2',item.title),text('p',item.body));card.append(copy,visual(item));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
+      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id='section-'+index;const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div',kinds[item.kind],'tag'),text('h2',item.title),text('p',item.body));card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
       const labels={verified:'확인됨',failed:'실패',unverified:'미검증'};
       $('verification').hidden=!(page.checks||[]).length;
       (page.checks||[]).forEach(item=>{const row=document.createElement('div');row.className='check';row.append(text('span',labels[item.status],'badge '+item.status));const detail=document.createElement('div');detail.append(text('strong',item.text),text('p',item.evidence,'evidence'));row.append(detail);$('checks').append(row);});
