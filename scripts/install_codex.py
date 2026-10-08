@@ -11,7 +11,8 @@ import tempfile
 
 SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review")
 SOURCE = Path(__file__).resolve().parents[1] / "skills"
-TEMPLATE = SOURCE.parent / "instructions" / "automatic.md"
+TEMPLATE = SOURCE.parent / "instructions" / "manual.md"
+# Keep legacy markers so updates replace old automatic instructions in place.
 START = "<!-- showwork:automatic:start -->"
 END = "<!-- showwork:automatic:end -->"
 
@@ -203,10 +204,10 @@ def main():
         scope_name = "project" if args.target is not None else "user"
         for runtime in runtimes:
             count = install(args.target, runtime=runtime)
-            print(f"Showwork {version} ({runtime}): installed/updated {count} skills; automatic routing is configured in {scope_name} instructions.")
+            print(f"Showwork {version} ({runtime}): installed/updated {count} skills; command-only guidance is configured in {scope_name} instructions.")
     except (OSError, ValueError) as error:
         parser.exit(1, f"showwork: {error}\n")
-    print("Start a new session in the installed runtime(s) and describe your task normally.")
+    print("Start a new session. Invoke $showwork in Codex or /showwork in Claude to explain a result.")
 
 
 if __name__ == "__main__":

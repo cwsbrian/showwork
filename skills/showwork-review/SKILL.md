@@ -1,9 +1,12 @@
 ---
 name: showwork-review
 description: Review a software change against its intended behavior, full diff, and evidence, with risk-proportional adversarial checks. Use for Showwork code or implementation reviews; report findings without applying unrequested fixes.
+disable-model-invocation: true
 ---
 
 # Showwork Review
+
+Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task.
 
 Report actionable defects and evidence gaps in the requested change. Do not edit production code or apply fixes unless the user authorized fixes. Read repository instructions and preserve local changes. Use the user's language and the repository's review conventions when available.
 

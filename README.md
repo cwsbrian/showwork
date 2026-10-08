@@ -1,135 +1,79 @@
 # Showwork
 
-**Make coding agents show their work.**
+**작업이 끝난 뒤, 무엇이 달라졌는지 쉽게 보여줍니다.**
 
-*Plan visually. Build autonomously. Verify with evidence.*
-
-Showwork는 AI 코딩 에이전트의 계획과 변경을 사람이 이해하고, 중요한 결정을 내리고, 실제 증거로 결과를 확인하도록 돕는 Claude Code·Codex 플러그인입니다.
+평소에는 켜지지 않습니다. 필요한 때 명령어를 입력하면 바뀐 화면과 동작, 확인한 내용, 남은 문제를 브라우저에서 볼 수 있어요.
 
 ```mermaid
 flowchart LR
-    U[Understand] --> Q{시각적 선택이 필요한가?}
-    Q -->|필요| V[브라우저에서 비교·선택]
-    Q -->|불필요| B[Build]
-    V --> B
-    B --> C[Challenge]
-    C --> T[Verify]
-    T --> P[Prove]
-    P --> E[브라우저에서 결과 설명]
+    A[평소처럼 작업] --> B[Showwork 명령 입력]
+    B --> C[바뀐 결과와 전후 비교]
+    C --> D[확인한 내용과 남은 문제]
 ```
 
-## 동작 방식
-
-“구독 취소 기능을 추가해줘”라고 요청하면 코드를 살펴보고 현재 흐름과 변경 후 동작을 보여줍니다. 취소를 즉시 적용할지 기간 말에 적용할지처럼 결과를 바꾸는 결정이 빠져 있다면 선택지를 설명합니다. 이미 정한 사항과 일상적인 구현 선택은 다시 승인받지 않습니다.
-
-단순하고 명확한 작업은 바로 진행합니다. UI 선택을 받아야 한다면 브라우저에서 실제 비교안을 보여주고 선택을 기록합니다. 모든 화면 작업에 컨펌 단계를 만들지는 않습니다.
-
-구현 후에는 실제 실패 가능성을 검토하고, 관련 테스트와 실행 결과를 요구사항에 연결합니다. 마지막에는 브라우저에서 실제 결과 화면, 동작 흐름, 변경 전후 비교 등 이해에 필요한 시각 자료와 검증 결과를 함께 설명합니다. 확인하지 못한 부분은 미검증으로 남깁니다. 완료 설명은 추가 승인을 요구하지 않습니다.
-
-네 가지 원칙을 따릅니다.
-
-- **보여줄 수 있는 것을 상상하게 하지 않는다.** 화면, 동작 예시, 다이어그램 중 이해에 필요한 표현을 사용합니다.
-- **사람이 결정해야 할 때만 묻는다.** 중요한 제품·사업·설계 선택을 드러내고, 반복적인 승인 절차를 만들지 않습니다.
-- **구현을 맡겨도 기술적 이해는 유지한다.** 변경 이유와 영향, 중요한 판단을 설명합니다.
-- **증거 없이 완료라고 하지 않는다.** 계획, 테스트 성공, 실제 동작, 미검증 사항을 구분합니다.
-
-## 시작하기
-
-별도 서비스나 API 키가 필요하지 않습니다. 사용하는 코딩 에이전트의 기존 인증과 도구를 사용합니다. Python 3.11 이상이 필요합니다.
-
-**한 번 설치하면 Codex와 Claude Code 모두 사용자 전체에 적용됩니다.** 어느 폴더에서든 실행하세요. Node.js 20 이상(npm/npx 포함)과 Git이 필요합니다.
+## 설치와 업데이트
 
 ```bash
 npx --yes github:cwsbrian/showwork
 ```
 
-기본 설치 위치는 다음과 같습니다. 기존 사용자 지침은 보존하고 Showwork 관리 블록만 갱신합니다.
+한 번 실행하면 Codex와 Claude Code에 사용자 단위로 설치합니다. 같은 명령을 다시 실행하면 최신 버전으로 바뀝니다. Node.js 20 이상, Git, Python 3.11 이상이 필요합니다. 별도 API 키는 필요하지 않습니다.
 
-| 도구 | 스킬 | 자동 적용 지침 |
+설치 뒤 **새 세션**을 여세요. 일반 작업 요청에는 Showwork가 켜지지 않습니다.
+
+## 작업이 끝난 뒤 사용하기
+
+| 설치 방식 | 결과 설명 명령 |
+| --- | --- |
+| Codex 사용자 설치 | `$showwork 방금 작업한 결과를 보여줘` |
+| Claude 사용자 설치 | `/showwork 방금 작업한 결과를 보여줘` |
+| Claude 플러그인 | `/showwork:run 방금 작업한 결과를 보여줘` |
+
+명령만 입력해도 현재 작업과 변경 내용을 확인합니다. 어떤 결과인지 알 수 없으면 대상만 물어봅니다. 결과 설명 요청만으로 코드를 다시 만들거나 고치지는 않습니다. 명령과 함께 새 구현을 명시한 경우에는 구현과 검사를 마친 뒤 결과를 보여줍니다.
+
+설명은 다음 내용에 집중합니다.
+
+- 무엇이 바뀌었는지, 전과 비교해 무엇이 좋아졌는지
+- 화면과 기능이 지금 어떻게 움직이는지
+- 실제로 확인한 것과 아직 남은 문제
+
+긴 작업 일지나 매 단계의 승인 절차를 만들지 않습니다. 필요한 기술 자료는 ‘자세히 보기’에 둡니다.
+
+## 다른 명령
+
+| 용도 | Codex | Claude 사용자 설치 | Claude 플러그인 |
+| --- | --- | --- | --- |
+| 계획만 세우기 | `$showwork-plan` | `/showwork-plan` | `/showwork:plan` |
+| 변경 검토하기 | `$showwork-review` | `/showwork-review` | `/showwork:review` |
+| 잘 되는지 확인하기 | `$showwork-verify` | `/showwork-verify` | `/showwork:verify` |
+| 반례 중심 검토와 시각 보고서 | `$showwork-adverial-review` | `/showwork-adverial-review` | `/showwork:adverial-review` |
+
+모두 직접 명령을 입력했을 때만 사용합니다. 일반 요청이나 Showwork에 대한 대화는 실행 명령이 아닙니다. 한 작업에서 켰다고 다음의 다른 작업까지 계속 켜지지는 않습니다.
+
+## 설치 위치와 이전 버전 갱신
+
+| 도구 | 스킬 | 명령 전용 안내 |
 | --- | --- | --- |
 | Codex | `~/.agents/skills/showwork*` | `~/.codex/AGENTS.md` (활성 override 우선) |
 | Claude Code | `~/.claude/skills/showwork*` | `~/.claude/CLAUDE.md` |
 
-`CODEX_HOME`과 `CLAUDE_CONFIG_DIR`을 존중합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 열고 평소처럼 요청하세요. Claude는 `/showwork`, `/showwork-plan`, `/showwork-review`, `/showwork-verify`, `/showwork-adverial-review`로 직접 호출할 수도 있습니다. 하나만 설치하려면 `--runtime codex` 또는 `--runtime claude`를 붙이세요.
+`CODEX_HOME`과 `CLAUDE_CONFIG_DIR`을 존중합니다. 이전 버전의 자동 적용 지침은 관리 블록 안에서 명령 전용 지침으로 교체합니다. 블록 밖의 사용자 지침과 다른 스킬은 보존합니다. Codex 자동 선택과 Claude 자동 호출을 각각 끄고, 플러그인의 요청별 자동 실행 연결도 제거했습니다.
 
-[Codex 사용자 스킬](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [Claude 사용자 스킬](https://code.claude.com/docs/en/skills#choose-where-skills-load) · [Claude 사용자 지침](https://code.claude.com/docs/en/memory)
+이전에 프로젝트에 따로 설치했다면 해당 프로젝트도 `npx --yes github:cwsbrian/showwork --target /absolute/project`로 갱신하세요. 다른 프로젝트의 옛 설치는 자동으로 찾아 수정하지 않습니다. 같은 스킬의 사용자 설치와 플러그인 중복 활성화는 피하세요.
 
-프로젝트 하나에만 설치하려면 `npx --yes github:cwsbrian/showwork install --target /absolute/path/to/your-project`를 사용하세요. 기본 사용자 설치는 현재 프로젝트 파일을 수정하지 않습니다.
+한 도구만 설치하려면 `--runtime codex` 또는 `--runtime claude`를 붙이세요. npm 레지스트리에 게시하지 않았으므로 `npx showwork` 대신 위 GitHub 명령을 사용하세요. [설치·복구 안내](docs/installation.md)
 
-**업데이트도 같은 명령을 다시 실행하면 됩니다.** GitHub의 최신 기본 브랜치를 가져오며, 바뀐 스킬은 각 도구의 `showwork-backups/`에 이전 내용을 보관한 뒤 교체합니다. 업데이트 후 새 세션을 여세요.
-
-이 명령은 GitHub에서 직접 가져옵니다. npm 레지스트리에는 아직 게시하지 않았으므로 `npx showwork`는 사용하지 마세요. 별도 Claude 플러그인 로딩 방식이 필요하면 아래 방법도 사용할 수 있습니다.
-
-### Claude Code 플러그인으로 직접 실행 (선택)
-
-npx 사용자 설치를 했다면 이 단계는 필요하지 않습니다. 사용자 스킬 설치와 같은 플러그인의 중복 활성화는 피하세요.
-
-먼저 저장소를 내려받고, 경로를 실제 위치로 바꾸세요.
+Claude 플러그인으로 직접 쓸 때는 저장소를 내려받은 뒤 실행합니다.
 
 ```bash
-git clone https://github.com/cwsbrian/showwork.git
-```
-
-```bash
-cd /absolute/path/to/your-project
 claude --plugin-dir /absolute/path/to/showwork
 ```
 
-세션에서 일반 요청을 입력합니다. Python 3.11 이상이 필요합니다. 요청 훅이 자동 판단 지침을 전달합니다.
-
-```text
-구독 취소 기능을 추가해줘
-```
-
-특정 모드를 직접 지정할 수도 있습니다.
-
-```text
-/showwork:run 구독 취소 기능을 추가해줘
-/showwork:plan 구독 취소 기능의 동작과 구현 계획을 보여줘
-/showwork:review 현재 변경사항을 리뷰해줘
-/showwork:adverial-review 현재 변경사항을 반례 중심으로 리뷰해줘
-/showwork:verify 구현한 구독 취소 기능을 검증해줘
-```
-
-### Codex
-
-npx 대신 저장소를 내려받아 Python 설치기를 직접 실행할 수도 있습니다.
+Python 설치기를 직접 써도 됩니다. 이때는 먼저 저장소를 최신 버전으로 갱신하세요.
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 ```
-
-원하는 프로젝트에서 **새 Codex 채팅**을 열고 일반 요청을 입력합니다.
-
-```text
-구독 취소 기능을 추가해줘
-```
-
-설치기는 다섯 스킬과 함께 사용자 지침에 자동 판단 규칙을 추가합니다. 프로젝트별 지침은 전역 지침보다 우선할 수 있습니다. 이제 `$showwork`를 붙이지 않아도 작업 규모와 요청 범위에 맞는 경로를 선택하도록 지시됩니다.
-
-특정 모드를 직접 지정할 수도 있습니다.
-
-```text
-$showwork 구독 취소 기능을 추가해줘
-$showwork-plan 구독 취소 기능의 동작과 구현 계획을 보여줘
-$showwork-review 현재 변경사항을 리뷰해줘
-$showwork-adverial-review 현재 변경사항을 반례 중심으로 리뷰해줘
-$showwork-verify 구현한 구독 취소 기능을 검증해줘
-```
-
-설치기는 각 도구의 스킬 경로에 다섯 스킬을 복사합니다. 같은 내용은 그대로 두고, 달라진 스킬은 기존 파일을 백업한 뒤 최신 내용으로 교체합니다. 직접 수정한 내용도 백업에 남습니다. 지침에서는 Showwork가 관리하는 블록만 갱신하며 다른 내용을 보존합니다. 네이티브 플러그인 매니페스트도 포함되어 있습니다. 이전 프로젝트 설치는 자동 삭제하지 않습니다. 중복 설치 정리와 업데이트 방법은 [설치 안내](docs/installation.md)를 참고하세요.
-
-## 요청에 맞는 모드
-
-| 모드 | 결과 |
-| --- | --- |
-| 전체 실행 | 조사 → 필요할 때 브라우저 선택 → 구현 → 리뷰 → 검증 → 브라우저 결과 설명 |
-| 계획 | 동작 예시, 중요한 결정, 구현 순서, 관찰 가능한 성공 조건 |
-| 리뷰 | 전체 변경 범위에서 찾은 재현 가능한 결함과 검증 공백 |
-| 검증 | 요구사항별로 입증된 동작, 실패, 미검증 사항 |
-| Adverial review | 반례 중심 리뷰 → 실행 증거·모바일 실제 캡처 → localhost 시각 보고서 |
-
-계획·리뷰·검증만 요청하면 해당 범위에서 작업합니다. 일반 개발 요청에는 자동 적용되도록 연결되어 있고, 관련 없는 대화에는 작업 절차를 만들지 않습니다. 작업 시작 시 선택한 경로를 짧게 알려줍니다. 새 앱이라도 단순하고 명확하면 미리보기나 승인 질문 없이 진행할 수 있습니다. 시각적 선택이 필요할 때는 문자 그림 대신 브라우저 비교안을 사용합니다. 모델이 지침을 따르는지를 강제로 증명하는 정책 엔진은 아닙니다.
 
 ## 시각적 Adversarial Review
 
@@ -175,9 +119,9 @@ python3 /absolute/path/to/showwork/scripts/showwork.py init cancellation \
 
 기록 도구의 성공은 **증거가 수집됐다는 뜻**입니다. 요구사항을 충족하는지와 현재 코드에도 유효한지는 에이전트가 검토해야 합니다. 스킬은 이 도구 없이도 사용할 수 있습니다.
 
-## v0.4 범위와 검증
+## v0.5 범위와 검증
 
-이 버전은 공통 스킬, 두 런타임의 사용자 설치·업데이트, 플러그인 형식, 증거 기록 도구, 변경 영역별 상세 브라우저 설명을 제공합니다. Claude 사용자 설치는 CLAUDE.md 지침을 사용하고, 선택형 플러그인 로딩은 요청 훅을 사용합니다. Companion은 시각적 자료를 보여주는 도구입니다. 실제 앱의 브라우저 조작·스크린샷 수집·시뮬레이터 검증은 환경에 있는 도구로 수행하며, 입증하지 못한 요구사항은 미검증으로 보고합니다.
+이 버전은 공통 스킬, 두 런타임의 사용자 설치·업데이트, 플러그인 형식, 증거 기록 도구, 변경 영역별 상세 브라우저 설명을 제공합니다. 모든 실행 방식은 명령 전용이며 일반 요청에 끼어들지 않습니다. Companion은 시각적 자료를 보여주는 도구입니다. 실제 앱의 브라우저 조작·스크린샷 수집·시뮬레이터 검증은 환경에 있는 도구로 수행하며, 입증하지 못한 요구사항은 미검증으로 보고합니다.
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -191,8 +135,7 @@ claude plugin validate . --strict
 .codex-plugin/plugin.json    Codex 매니페스트
 .claude-plugin/plugin.json   Claude Code 매니페스트
 commands/                   Claude의 짧은 명령
-hooks/hooks.json            Claude 요청별 자동 적용
-instructions/automatic.md   두 환경의 공통 자동 판단 지침
+instructions/manual.md      두 환경의 공통 명령 전용 안내
 skills/                     두 환경이 공유하는 다섯 스킬
 skills/showwork/scripts/     로컬 브라우저 companion
 skills/showwork/assets/      선택·완료 설명 화면

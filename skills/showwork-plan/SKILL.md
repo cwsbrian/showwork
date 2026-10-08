@@ -1,9 +1,12 @@
 ---
 name: showwork-plan
 description: Plan a software change through code investigation, concrete examples or previews, consequential decisions, and testable acceptance criteria. Use for Showwork planning requests without implementing the change.
+disable-model-invocation: true
 ---
 
 # Showwork Plan
+
+Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task.
 
 Make the proposed change understandable and buildable. Planning is the deliverable: do not modify production code, install dependencies, or begin implementation unless the user also requested it. Inspect files and use existing read-only capabilities as needed. Save a plan file only when requested or required by the project's workflow.
 

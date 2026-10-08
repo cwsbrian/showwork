@@ -1,9 +1,12 @@
 ---
 name: showwork-verify
 description: Verify an existing software result against observable acceptance criteria using relevant checks, runtime exercises, and visual evidence. Use for Showwork verification requests and report what is proved, failing, or unverified.
+disable-model-invocation: true
 ---
 
 # Showwork Verify
+
+Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task.
 
 Determine what the current result demonstrably does. Use the user's criteria and actual affected flow. Verification alone does not authorize fixing production code or expanding scope; report failures unless fixes are also requested. Preserve local changes and avoid external side effects outside existing authorization.
 

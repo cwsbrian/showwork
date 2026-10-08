@@ -1,6 +1,8 @@
 # Browser companion: decide when needed, explain when done
 
-Use this bundled companion for two distinct moments:
+Use this companion only within an explicitly invoked Showwork task. Do not open it automatically for ordinary coding work. The main purpose is explaining the finished result; do not recount the agent's process.
+
+Two supported modes:
 
 - **Decision:** you need a human visual choice. Render real alternatives before asking. Do not open a design-approval loop for a clear, simple task or an already decided choice.
 - **Handoff:** after implementation and verification, explain the result with relevant visuals and evidence in the browser. No approval is requested. Keep a brief outcome summary in chat as well.
@@ -110,7 +112,7 @@ Read the complete relevant diff and list materially affected areas before author
 | UI or user workflow | Actual screen/state captures when available, the changed interaction flow, relevant empty/error/loading/mobile behavior and accessibility checks. A recreated diagram is an explanation, not an observed screenshot. |
 | Configuration, deployment or installation | Scope and path/setting changes, selection/routing behavior, upgrade/migration steps, compatibility and recovery behavior. Separate changes delivered in the code from actions actually performed in an environment. |
 
-Start with the outcome and a scope map, then the relevant domain diagrams/tables, then verification and remaining actions. Explain **what changed, why, how it behaves, and what evidence supports it**. Keep each section's opening short so the diagram is visible first; put long traces, source locations and contracts in supporting tables or expandable details below it. Where no baseline is available, say so rather than inventing a before state. For each important behavior, connect the actual command/request, observed result, and relevant limitation. Test counts alone are insufficient. Do not expose credentials or private payloads.
+Start with the finished behavior and a concrete before/after example, then the relevant diagrams, checks and remaining problems. Do not lead with a timeline of the agent's work. Explain **what changed, why, how it behaves, and what evidence supports it**. Keep each section's opening short so the diagram is visible first; put long traces, source locations and contracts in supporting tables or expandable details below it. Where no baseline is available, say so rather than inventing a before state. For each important behavior, connect the actual command/request, observed result, and relevant limitation. Test counts alone are insufficient. Do not expose credentials or private payloads.
 
 The companion renders static inline HTML/SVG: draw diagrams with labeled nodes/arrows and render tables with `<table>`, `<thead>`, and `<th>`. Do not paste raw Mermaid expecting it to render, or load external scripts. Use native `<details><summary>` for optional long command output or SQL; keep important findings and risks visible. Wrap wide tables in an overflow container for small screens. Handoff sections use the full page width and expand with their content; section links help navigate a long explanation.
 

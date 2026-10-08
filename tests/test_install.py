@@ -138,7 +138,7 @@ class InstallTest(unittest.TestCase):
                     INSTALLER.install()
             self.assertFalse((home / ".agents").exists())
 
-    def test_adds_automatic_routing_preserving_existing_instructions(self):
+    def test_adds_command_guidance_preserving_existing_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
             path = project / "AGENTS.md"
@@ -176,6 +176,25 @@ class InstallTest(unittest.TestCase):
             self.assertTrue(updated.startswith(prefix + INSTALLER.START))
             self.assertTrue(updated.endswith(INSTALLER.END + suffix))
             self.assertNotIn("Old rule", updated)
+
+    def test_upgrade_replaces_automatic_block_for_both_runtimes(self):
+        for runtime, filename in [('codex', 'AGENTS.md'), ('claude', '.claude/CLAUDE.md')]:
+            with self.subTest(runtime=runtime), tempfile.TemporaryDirectory() as temporary:
+                project = Path(temporary)
+                path = project / filename
+                path.parent.mkdir(exist_ok=True)
+                before = 'My rules\n' + INSTALLER.START + '\nApply Showwork automatically to software work.\n' + INSTALLER.END + '\nKeep this too\n'
+                path.write_text(before)
+                INSTALLER.install(project, runtime=runtime)
+                updated = path.read_text()
+                self.assertNotIn('Apply Showwork automatically', updated)
+                self.assertIn('only when the user explicitly invokes', updated)
+                self.assertTrue(updated.startswith('My rules\n'))
+                self.assertTrue(updated.endswith('\nKeep this too\n'))
+                INSTALLER.install(project, runtime=runtime)
+                self.assertEqual(path.read_text(), updated)
+                backups = list((project / ('.agents' if runtime == 'codex' else '.claude') / 'showwork-backups').glob('update-*/*'))
+                self.assertTrue(any(p.is_file() and p.read_text() == before for p in backups))
 
     def test_malformed_instruction_markers_prevent_partial_install(self):
         with tempfile.TemporaryDirectory() as temporary:

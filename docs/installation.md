@@ -1,6 +1,6 @@
 # Showwork 설치와 업데이트
 
-Showwork 0.4.3은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
+Showwork 0.5.0은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
 
 ## 설치·업데이트는 같은 명령
 
@@ -12,7 +12,7 @@ npx --yes github:cwsbrian/showwork
 
 처음에는 설치하고, 다음부터는 GitHub 기본 브랜치의 최신 커밋으로 갱신합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 여세요. 프로젝트마다 반복 설치할 필요가 없습니다.
 
-| 도구 | 사용자 스킬 | 자동 적용 지침 | 백업 |
+| 도구 | 사용자 스킬 | 명령 전용 안내 | 백업 |
 | --- | --- | --- | --- |
 | Codex | `~/.agents/skills/showwork*` | `~/.codex/AGENTS.md` | `~/.agents/showwork-backups/` |
 | Claude Code | `~/.claude/skills/showwork*` | `~/.claude/CLAUDE.md` | `~/.claude/showwork-backups/` |
@@ -64,16 +64,21 @@ Python 진입점도 기본은 두 도구이며 `--runtime`/`--target`을 지원�
 
 ## 사용과 확인
 
-새 세션에서 평소처럼 요청합니다.
+새 세션에서 평소처럼 작업한 뒤, 결과를 보고 싶을 때 명령을 입력합니다.
 
 ```text
-HTML/CSS/JavaScript로 간단한 할 일 앱을 만들어줘.
-추가, 완료 처리, 삭제가 가능하고 새로고침해도 목록이 유지되어야 해.
+# Codex
+$showwork 방금 작업한 결과를 보여줘
+
+# Claude 사용자 설치
+/showwork 방금 작업한 결과를 보여줘
 ```
 
-단순하고 명확한 작업은 바로 구현해도 정상입니다. 시각적 선택이 필요할 때만 브라우저에서 비교합니다. 완료 설명은 바뀐 영역에 맞춰 라우트 흐름도·경로 표, 스키마 전후 비교·마이그레이션 상태, 시스템 구조·데이터 흐름, 검증 근거를 보여줍니다. 변경하지 않은 영역을 억지로 채우지 않습니다. 지침은 모델의 행동을 유도하며 모든 응답의 완전성을 강제하는 정책 엔진은 아닙니다.
+일반 작업 요청에는 Showwork가 켜지지 않습니다. 결과 설명은 무엇이 바뀌었고 지금 어떻게 동작하는지, 확인한 내용과 남은 문제에 집중합니다. 명령에 구현을 따로 요청하지 않았다면 제품 코드를 바꾸지 않습니다. `showwork-plan`, `showwork-review`, `showwork-verify`, `showwork-adverial-review`도 같은 접두사로 직접 호출합니다.
 
-직접 호출하려면 Codex는 `$showwork`, Claude는 `/showwork`를 사용합니다. `showwork-plan`, `showwork-review`, `showwork-verify`, `showwork-adverial-review`도 같은 접두사로 호출할 수 있습니다. 아무 안내 없이 진행한다면 설치 범위의 스킬·지침 블록과 새 세션 여부, 상위 관리 정책을 확인하세요.
+Codex는 각 스킬의 `agents/openai.yaml`에서 `allow_implicit_invocation: false`를, Claude는 `SKILL.md`에서 `disable-model-invocation: true`를 사용합니다. 업데이트하면 기존 자동 안내 블록을 명령 전용 안내로 교체합니다. 과거 설치를 찾아 바꾸기 위해 `showwork:automatic` 표시 이름은 유지하며, 이 이름이 자동 실행을 뜻하지는 않습니다. 플러그인의 `UserPromptSubmit` 훅은 제거했습니다. [Claude 호출 제한](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill)
+
+이미 열린 세션에는 이전 지침이 남을 수 있으므로 반드시 새 세션을 여세요. 이전 프로젝트 설치는 해당 프로젝트에서 `--target`으로 갱신하거나 관리 블록을 정리해야 합니다. 그 밖에 사용자가 직접 만든 자동 실행 규칙이나 관리 정책은 설치기가 바꾸지 않습니다.
 
 `adverial-review`는 리뷰 결과를 localhost 브라우저에서 보여주고, 모바일 대상에서는 시뮬레이터/에뮬레이터 실행 및 실제 화면 캡처를 요구합니다. npx 사용자 설치에서는 Claude `/showwork-adverial-review`, Codex `$showwork-adverial-review`로 호출합니다. 아래 플러그인 로딩 방식에서만 콜론 명령 `/showwork:adverial-review`를 사용합니다.
 
@@ -85,7 +90,7 @@ npx 사용자 설치를 사용한다면 필요하지 않습니다. 저장소를 
 claude --plugin-dir /absolute/path/to/showwork
 ```
 
-이 방식은 세션에 플러그인을 로드하며, 함께 제공되는 `UserPromptSubmit` 훅으로 자동 판단 지침을 전달합니다. `/showwork:run`, `/showwork:plan`, `/showwork:review`, `/showwork:verify`, `/showwork:adverial-review` 단축 명령을 사용합니다. 훅은 도구 실행을 차단하지 않습니다. [Claude 플러그인](https://code.claude.com/docs/en/plugins)
+이 방식은 세션에 플러그인을 로드합니다. 일반 요청에 자동 지침을 전달하는 훅은 없습니다. `/showwork:run`, `/showwork:plan`, `/showwork:review`, `/showwork:verify`, `/showwork:adverial-review` 단축 명령을 사용합니다. [Claude 플러그인](https://code.claude.com/docs/en/plugins)
 
 ## 제거와 검증
 

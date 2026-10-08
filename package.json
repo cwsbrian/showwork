@@ -1,16 +1,17 @@
 {
   "name": "showwork",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "private": true,
-  "description": "Install Showwork skills and automatic routing for Codex and Claude Code.",
+  "description": "Install command-only Showwork result walkthroughs for Codex and Claude Code.",
   "repository": "github:cwsbrian/showwork",
   "bin": { "showwork": "scripts/cli.cjs" },
   "engines": { "node": ">=20" },
   "files": [
     "scripts/cli.cjs",
     "scripts/install_codex.py",
-    "instructions/automatic.md",
+    "instructions/manual.md",
     "skills/*/SKILL.md",
+    "skills/*/agents/*.yaml",
     "skills/*/references/*.md",
     "skills/*/scripts/*.py",
     "skills/*/assets/*.html"

@@ -1,6 +1,6 @@
 ---
-description: Run the Showwork coding workflow for a task.
-argument-hint: "[task]"
+description: Explain the finished result, changes, checks and remaining problems.
+argument-hint: "[completed task or change scope]"
 disable-model-invocation: true
 ---
 

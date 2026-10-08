@@ -27,6 +27,13 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     writeFileSync(join(project, 'AGENTS.md'), 'Keep my instructions.\n');
     assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 5/);
     for (const skillRoot of ['.agents/skills', '.claude/skills']) {
+      for (const name of ['showwork','showwork-plan','showwork-review','showwork-verify','showwork-adverial-review']) {
+        const skill = join(project, skillRoot, name);
+        const frontmatter = readFileSync(join(skill, 'SKILL.md'), 'utf8').split('---')[1];
+        assert.match(frontmatter, /^disable-model-invocation: true$/m);
+        assert.doesNotMatch(frontmatter, /^user-invocable: false$/m);
+        assert.match(readFileSync(join(skill,'agents/openai.yaml'),'utf8'), /allow_implicit_invocation: false/);
+      }
       const review = join(project, skillRoot, 'showwork-adverial-review');
       assert.equal(readFileSync(join(review, 'SKILL.md'), 'utf8'), readFileSync(join(root, 'skills/showwork-adverial-review/SKILL.md'), 'utf8'));
       assert.ok(existsSync(join(review, 'references/mobile.md')));

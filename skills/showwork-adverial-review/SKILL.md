@@ -1,9 +1,12 @@
 ---
 name: showwork-adverial-review
 description: Perform an explicitly requested adversarial review and show findings with evidence in a localhost browser. Use for Showwork adverial-review or adversarial-review requests; for mobile apps, run the reviewed build in a simulator/emulator and attach actual screenshots. Review only unless fixes are authorized.
+disable-model-invocation: true
 ---
 
 # Showwork Adversarial Review
+
+Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task.
 
 Keep the public command spelling `adverial-review`. Use the user's language. This is a focused review with a visual report, not an implementation or approval workflow.
 
