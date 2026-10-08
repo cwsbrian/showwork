@@ -7,6 +7,8 @@ description: Review a software change against its intended behavior, full diff, 
 
 Report actionable defects and evidence gaps in the requested change. Do not edit production code or apply fixes unless the user authorized fixes. Read repository instructions and preserve local changes. Use the user's language and the repository's review conventions when available.
 
+Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
+
 ## Establish what is being reviewed
 
 - Identify the intended behavior, acceptance criteria, target branch or base, and head or local state. Read the complete relevant diff and added files, then affected callers and existing tests.

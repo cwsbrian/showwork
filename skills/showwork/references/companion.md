@@ -7,6 +7,16 @@ Use this bundled companion for two distinct moments:
 
 The companion uses Python 3.11+ with no third-party runtime dependencies. It works both in the plugin bundle and a copied Codex skill: resolve `../scripts/companion.py` relative to this guide (inside the `showwork` skill). Always pass the target project's absolute path with `--project`.
 
+## Explain simply, with detail available
+
+Write chat, page titles, captions and diagram labels in the user's language with short sentences and familiar words a third-grade child could understand. Speak to an adult respectfully; no baby talk, forced analogies or classroom tone. Start with what changed and why it helps, then what was checked and what remains uncertain. Usually a few sentences suffice in chat; do not repeat the whole report.
+
+Keep each browser section's visible explanation to one or two short sentences when possible. Show a useful picture or concrete example. Put file paths, commands, protocol names and supporting tables in native `<details><summary>자세히 보기</summary>...</details>` (translate the label for other languages). Keep important findings, data-loss risks, failures and missing checks outside the collapsed details. Cover every materially changed area without turning the opening into a long technical account.
+
+Use everyday labels first in diagrams; preserve exact route/table/field names nearby or in details so the explanation remains traceable. If a technical term is necessary, explain it on first use. For example: “로그인한 사람인지 확인해요” before the supporting label `auth middleware`; “저장된 정보의 모양을 바꿔요” before migration details. Never drop a meaningful branch, table relationship, finding severity or uncertainty just to shorten the page.
+
+Example rewrite (same facts): “인증된 원본 asset 접근과 키보드 내비게이션을 검증했습니다.” → “작게 보이던 사진을 크게 열 수 있게 했어요. 키보드로도 열리는지 확인했어요.” Keep exact commands and access-control evidence in the supporting details. Give these writing rules to the presentation agent and check its output for unexplained jargon and long paragraphs before sharing.
+
 ## Delegate presentation, retain evidence ownership
 
 The primary implementation/review agent owns scenario selection, browser or simulator operation, screenshot capture, and expected-versus-observed judgments. For mobile, follow the adversarial review's simulator/emulator evidence requirements. A presentation agent must not operate the application, collect replacement evidence, change findings/severity, or turn unverified checks into passes.

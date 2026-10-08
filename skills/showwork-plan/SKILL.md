@@ -7,6 +7,8 @@ description: Plan a software change through code investigation, concrete example
 
 Make the proposed change understandable and buildable. Planning is the deliverable: do not modify production code, install dependencies, or begin implementation unless the user also requested it. Inspect files and use existing read-only capabilities as needed. Save a plan file only when requested or required by the project's workflow.
 
+Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
+
 ## Understand the actual change
 
 - Read the request, repository instructions, and relevant existing code. Trace the current behavior and affected callers; distinguish observations from assumptions.

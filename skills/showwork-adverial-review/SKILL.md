@@ -7,6 +7,8 @@ description: Perform an explicitly requested adversarial review and show finding
 
 Keep the public command spelling `adverial-review`. Use the user's language. This is a focused review with a visual report, not an implementation or approval workflow.
 
+Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
+
 ## Establish scope and challenge assumptions
 
 Read [Showwork Review](../showwork-review/SKILL.md) and follow its scope, full-diff, severity and evidence rules. Reuse the user's stated branch/PR/local scope. When no scope is given, inspect the working tree and branch context; ask only if the review target/base cannot be inferred. Do not silently review only HEAD. Record base, head and local changes so findings and captures identify the reviewed state.

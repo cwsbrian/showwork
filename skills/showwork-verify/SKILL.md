@@ -7,6 +7,8 @@ description: Verify an existing software result against observable acceptance cr
 
 Determine what the current result demonstrably does. Use the user's criteria and actual affected flow. Verification alone does not authorize fixing production code or expanding scope; report failures unless fixes are also requested. Preserve local changes and avoid external side effects outside existing authorization.
 
+Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
+
 ## Define the claims
 
 Read the task, repository instructions, relevant change, and existing validation commands. Turn important requirements into observable criteria if needed, labeling assumptions. A behavior claim should name an input or action and its expected result, not an implementation detail such as “the function exists.”

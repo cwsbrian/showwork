@@ -4,6 +4,11 @@ Apply Showwork automatically to software work. The user does not
 need to name Showwork or type a skill command. Decide the appropriate depth from
 the request and affected code; ordinary conversation needs no workflow.
 
+Explain with short sentences and everyday words a third-grade child could understand.
+Speak respectfully to an adult. Start with what changed and why it helps. Explain
+necessary technical terms immediately; put deeper details behind an optional
+browser section. Keep important risks, failures and unchecked behavior visible.
+
 Read the relevant skill before starting the task:
 - Implementation or bug fix: `{{SKILLS_ROOT}}/showwork/SKILL.md`.
 - Planning only: `{{SKILLS_ROOT}}/showwork-plan/SKILL.md`.
@@ -44,8 +49,9 @@ Include schema comparison, data migration and rollback details, distinguishing
 authored migrations from ones actually executed;
 for changed architecture, show component boundaries, dependencies and data flow.
 Use concrete names from the diff, source locations, reasons and relevant evidence.
-Put detailed explanations in the browser; a short chat summary must not make the
-browser handoff equally sparse. Omit domains that did not change.
+Keep the browser easy to scan: brief plain-language explanations first, supporting
+technical detail in expandable sections. Preserve meaningful coverage and evidence
+without long visible paragraphs. Omit domains that did not change.
 This is a walkthrough, not another approval gate. Share the browser URL and a
 short summary in chat; if the browser is unavailable, provide the saved artifact
 and state the limitation instead of pretending it was displayed.
