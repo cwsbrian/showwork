@@ -50,10 +50,35 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   const handoff={mode:'handoff',title:'Review what changed',summary:'Choices show comparisons; finished work shows results and evidence.',sections:[{kind:'explanation',title:'From request to result',body:'Proceed with clear tasks. Show alternatives only when a choice is needed.',html:'<div style="display:grid;gap:12px"><div style="background:#eef4f1;padding:16px;border-radius:10px">Request → visual choice when needed</div><div style="text-align:center">↓</div><div style="background:#e9eff8;padding:16px;border-radius:10px">Implementation · verification → result</div></div>'}],checks:[{status:'verified',text:'Keyboard selection and saved choice',evidence:'Selected with arrow keys in Chromium, submitted, and confirmed the board event.'},{status:'unverified',text:'Visual quality of a real user app',evidence:'This checks the companion feature; no separate app was evaluated.'}]};
   handoff.sections.push({kind:'explanation',title:'Routing and schema explanation example',body:'Rendering example only; it does not represent a real app change or applied migration.',html:'<h2>Changed field comparison</h2><table><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>'+Array.from({length:25},(_,i)=>`<tr><th>column_${i}</th><td>nullable</td><td>NOT NULL · Example explanation</td></tr>`).join('')+'</tbody></table><details><summary>Check command details</summary><div style="height:400px">Additional check results</div></details>'});
   handoff.sections.push({kind:'observed',title:'Review capture attachment check',body:'Companion screen captured in Chromium for this check; not a mobile simulator capture.',image:path.join(output,'decision.png')});
+  fs.writeFileSync(path.join(temporary,'store.ts'),Array.from({length:30},(_,i)=>i===11?'export async function saveTask(task: Task): Promise<void> { // keep order\n  const key = "tasks"; return storage.set(key, JSON.stringify([task, 42, null]));\n}':`const line${i} = ${i};`).join('\n'));
+  handoff.files=[
+    {path:'store.ts',why:'Saving tasks now keeps their order.',lines:[12,14]},
+    {path:'api/routes.py',why:'The new route checks the owner before saving.',diff:true,code:'@@ -10,3 +10,4 @@ def save(request):\n     task = load(request)\n-    return store(task)\n+    if task.owner != request.user:  # refuse others\n+        raise Forbidden("not yours")\n     return store(task)\n'},
+  ];
   publish(handoff);await page.getByRole('heading',{name:handoff.title}).waitFor();
+  const files=page.locator('#files details.file');
+  assert.equal(await files.count(),2);
+  assert.equal(await page.locator('#files .editor').count(),0,'Code stays folded until opened');
+  await page.locator('#file-0 summary').click();
+  const first=page.locator('#file-0 .code');await first.waitFor();
+  assert.equal(await first.locator('.line').count(),3);
+  assert.equal((await first.locator('.line .no').first().textContent()).trim(),'12');
+  assert.ok((await first.innerText()).includes('saveTask'),'Code is read from the project file');
+  for(const [cls,value] of [['kw','export'],['fn','saveTask'],['ty','Promise'],['str','"tasks"'],['num','42'],['lit','null'],['com','// keep order']])
+    assert.equal(await first.locator('.tk-'+cls,{hasText:value}).count()>0,true,`${cls} token for ${value}`);
+  await page.getByRole('button',{name:'Expand all'}).click();
+  await page.getByRole('button',{name:'Collapse all'}).waitFor();
+  const diff=page.locator('#file-1 .code');
+  assert.equal(await diff.locator('.line.add').count(),2);assert.equal(await diff.locator('.line.del').count(),1);
+  assert.equal((await diff.locator('.line.add .no').first().textContent()).trim(),'11',"Added lines use the new file's numbers");
+  assert.equal(await diff.locator('.tk-com',{hasText:'# refuse others'}).count(),1);
+  assert.equal(await page.locator('#contents a',{hasText:'Files worth reviewing'}).count(),1);
+  await page.locator('#files').screenshot({path:path.join(output,'files.png')});
+  await page.getByRole('button',{name:'Collapse all'}).click();
+  await page.locator('#file-0 summary').click();
   const detailed=page.locator('#section-1 iframe');
   await waitFor(async()=>await detailed.evaluate(frame=>frame.clientHeight>760));
-  assert.equal(await page.locator('#contents a').count(),3);
+  assert.equal(await page.locator('#contents a').count(),4);
   const capture=page.locator('#section-2 img');
   await waitFor(()=>capture.evaluate(img=>img.complete&&img.naturalWidth===1280));
   assert.ok((await capture.getAttribute('src')).startsWith('/assets/'));
@@ -88,6 +113,6 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.deepEqual(errors,[]);
   server.kill('SIGINT');await waitFor(()=>server.exitCode!==null);
   await page.getByText('Disconnected · Last page').waitFor();
-  const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','image decision selection without navigation','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded','keyboard original image access with authenticated full-resolution popup'],screenshots:['decision.png','handoff.png','mobile.png']};
+  const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','image decision selection without navigation','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded','keyboard original image access with authenticated full-resolution popup','file accordions with code read from the project, line numbers, highlighting and diffs'],screenshots:['decision.png','handoff.png','mobile.png']};
   fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,output},null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server.exitCode===null)server.kill('SIGINT');await waitFor(()=>server.exitCode!==null).catch(()=>server.kill('SIGKILL'));if(runtimeDirectory)fs.rmSync(path.dirname(runtimeDirectory),{recursive:true,force:true});fs.rmSync(temporary,{recursive:true,force:true});});

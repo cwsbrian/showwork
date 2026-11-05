@@ -24,8 +24,27 @@
     #verification { margin-top:38px; } .checks { background:#fff; border:1px solid var(--line); border-radius:15px; overflow:hidden; } .check { padding:19px 23px; display:grid; grid-template-columns:100px 1fr; gap:18px; border-bottom:1px solid var(--line); } .check:last-child { border:0; }
     .badge { align-self:start; border-radius:5px; padding:3px 8px; font-size:12px; font-weight:700; text-align:center; background:#e5f2eb; color:#19583b; } .failed { background:#fdeceb; color:#943e35; } .unverified { background:#fff1d6; color:#735311; }
     .check strong { display:block; font-size:15px; } .evidence { margin:5px 0 0; color:var(--muted); font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    #files { margin-top:38px; scroll-margin-top:20px; } .files-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; } .files-head h2 { margin:0 0 14px; }
+    button.linkish { background:none; color:var(--accent); padding:4px 0; font:600 14px system-ui; } .file-list { display:grid; gap:10px; }
+    .file { background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; min-width:0; } .file[open] { box-shadow:0 8px 24px #116e600f; }
+    .file > summary { list-style:none; cursor:pointer; padding:14px 18px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:2px 12px; align-items:baseline; } .file > summary::-webkit-details-marker { display:none; }
+    .file > summary:focus-visible { outline:3px solid #65cdb7; outline-offset:-3px; } .file > summary:hover .file-path { color:var(--accent); }
+    .chev { color:var(--muted); font-size:11px; transition:transform .15s; } .file[open] .chev { transform:rotate(90deg); }
+    .file-path { font:600 14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow-wrap:anywhere; } .file-meta { font-size:12px; color:var(--muted); white-space:nowrap; }
+    .file-why { grid-column:2 / 4; color:var(--muted); font-size:14px; }
+    .editor { background:#1f2329; color:#d4d8de; border-top:1px solid var(--line); } .editor-bar { display:flex; align-items:center; gap:10px; padding:7px 12px; background:#181b20; color:#9aa3ae; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .dots { display:flex; gap:6px; } .dots i { width:10px; height:10px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+    .editor-bar .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .editor-bar .lang { text-transform:uppercase; letter-spacing:.6px; font-size:11px; }
+    button.copy { padding:3px 10px; border-radius:6px; background:#2d333b; color:#d4d8de; font:600 12px system-ui; } button.copy:hover { background:#3a414b; }
+    .code { overflow:auto; max-height:72vh; padding:8px 0; font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size:4; outline:0; } .code:focus-visible { box-shadow:inset 0 0 0 2px #65cdb7; }
+    .line { display:flex; width:max-content; min-width:100%; min-height:1.65em; } .no { position:sticky; left:0; flex:none; padding:0 14px 0 10px; text-align:right; white-space:pre; color:#636d78; background:#1f2329; user-select:none; }
+    .src { white-space:pre; padding-right:28px; } .mark { display:inline-block; width:1.6ch; user-select:none; color:#7d8590; }
+    .line.add { background:#1f3a2a; } .line.add .no { background:#1c3326; color:#7cc492; } .line.add .mark { color:#7cc492; }
+    .line.del { background:#43262a; } .line.del .no { background:#3a2326; color:#e5878f; } .line.del .mark { color:#e5878f; }
+    .line.hunk { background:#1d2a3d; color:#79b8ff; } .line.hunk .no { background:#1d2a3d; } .line.meta { color:#8b949e; font-weight:600; }
+    .tk-kw { color:#c792ea; } .tk-str { color:#a5d98a; } .tk-com { color:#7f8b97; font-style:italic; } .tk-num, .tk-lit { color:#f5a86b; } .tk-fn { color:#79b8ff; } .tk-ty { color:#ffd479; } .tk-key, .tk-tag { color:#ff8b94; }
     footer { margin-top:28px; font-size:12px; color:var(--muted); } [hidden] { display:none!important; } #empty { padding:55px 0; color:var(--muted); }
-    @media(max-width:560px) { main { padding:30px 18px; } header { padding:16px 18px; } .check { grid-template-columns:1fr; gap:8px; } .badge { justify-self:start; } h1 { letter-spacing:-1px; } }
+    @media(max-width:560px) { main { padding:30px 18px; } .file > summary { padding:13px 14px; } .file-why { grid-column:1 / 4; } header { padding:16px 18px; } .check { grid-template-columns:1fr; gap:8px; } .badge { justify-self:start; } h1 { letter-spacing:-1px; } }
   </style>
 </head>
 <body>
@@ -39,6 +58,7 @@
         <div class="decision-actions"><button id="submit" disabled>Choose this option</button><span id="selection-status" role="status">Choose an option, then press the button.</span></div>
       </section>
       <nav id="contents" aria-label="Report contents" hidden></nav><div id="sections" class="section-grid"></div>
+      <section id="files" hidden aria-labelledby="files-title"><div class="files-head"><h2 id="files-title">Files worth reviewing</h2><button id="toggle-files" class="linkish" type="button">Expand all</button></div><div id="file-list" class="file-list"></div></section>
       <section id="verification" hidden><h2>Checks and open questions</h2><div id="checks" class="checks"></div></section>
       <footer id="footer"></footer>
     </div>
@@ -58,6 +78,105 @@
       frame.srcdoc='<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:24px;font:15px/1.5 system-ui;color:#172f34;box-sizing:border-box;overflow-wrap:anywhere}*{box-sizing:border-box}svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d9e3e0;vertical-align:top}pre{white-space:pre-wrap}summary{cursor:pointer}</style>'+item.html;
       frame.onload=()=>{ try { const body=frame.contentDocument.body;const resize=()=>{const height=Math.max(260,Math.ceil(body.getBoundingClientRect().height)+2);frame.style.height=(page.mode==='handoff'?height:Math.min(760,height))+'px';};resize();const observer=new ResizeObserver(resize);observer.observe(body);observers.push(observer); } catch{} }; return frame;
     }
+    // Files worth reviewing: accordions with a read-only, editor-style code view (no outside scripts).
+    const FAMILY={js:'js',jsx:'js',ts:'js',tsx:'js',mjs:'js',cjs:'js',javascript:'js',typescript:'js',json:'json',py:'py',python:'py',rb:'py',ruby:'py',sh:'sh',zsh:'sh',bash:'sh',shell:'sh',toml:'sh',ini:'sh',yml:'yaml',yaml:'yaml',swift:'c',kt:'c',kts:'c',kotlin:'c',java:'c',go:'c',rs:'c',rust:'c',c:'c',h:'c',m:'c',mm:'c',cpp:'c',cs:'c',dart:'c',gradle:'c',php:'php',sql:'sql',css:'css',scss:'css',html:'html',htm:'html',xml:'html',vue:'html',svg:'html',plist:'html'};
+    const RX={slash:String.raw`\/\/[^\n]*`,block:String.raw`\/\*[\s\S]*?(?:\*\/|$)`,hash:String.raw`#[^\n]*`,dash:String.raw`--[^\n]*`,markup:String.raw`<!--[\s\S]*?(?:-->|$)`,
+      triple:String.raw`"""[\s\S]*?(?:"""|$)|'''[\s\S]*?(?:'''|$)`,dq:String.raw`"(?:\\.|[^"\\\n])*"`,sq:String.raw`'(?:\\.|[^'\\\n])*'`,bt:String.raw`\x60(?:\\[\s\S]|[^\x60\\])*\x60`,
+      num:String.raw`\b(?:0x[\da-fA-F]+|\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)\b`,word:String.raw`[@$]?[A-Za-z_][\w$]*`,tag:String.raw`<\/?[A-Za-z][\w:.-]*|\/?>`};
+    const RECIPES={js:'com:slash com:block str:bt str:dq str:sq num word',c:'com:slash com:block str:triple str:dq str:sq num word',py:'str:triple com:hash str:dq str:sq num word',sh:'com:hash str:dq str:sq num word',yaml:'com:hash str:dq str:sq num word',
+      json:'str:dq num word',php:'com:slash com:block com:hash str:dq str:sq num word',sql:'com:dash com:block str:sq str:dq num word',css:'com:block str:dq str:sq num word',html:'com:markup str:dq str:sq tag:tag'};
+    const COMPILED={};
+    for(const [name,recipe] of Object.entries(RECIPES)){const parts=recipe.split(' ').map(part=>{const [cls,key]=part.includes(':')?part.split(':'):[part,part];return [cls,RX[key]];});COMPILED[name]={classes:parts.map(([cls])=>cls),re:new RegExp(parts.map(([,rx])=>'('+rx+')').join('|'),'g')};}
+    const words=list=>new Set(list.split(' '));
+    const KEYWORDS={js:words('as async await break case catch class const continue debugger default delete do else enum export extends finally for from function get if implements import in instanceof interface let new of private protected public readonly return satisfies set static super switch throw try type typeof var void while with yield declare namespace abstract keyof'),
+      c:words('abstract actor as associatedtype async await break case catch class const continue default defer deinit do else enum extends extension fallthrough final finally fn for func fun go guard if impl implements import in init inout interface internal is lazy let loop match mod mut namespace new object open operator override package private protocol protected pub public repeat return some static struct super switch throw throws trait try typealias type use val var void when where while weak unowned yield chan select range'),
+      php:words('abstract as break case catch class const continue declare default do echo else elseif enum extends final finally fn for foreach function global if implements include interface match namespace new private protected public readonly require require_once return static switch throw trait try use while yield'),
+      py:words('and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case'),
+      sh:words('if then else elif fi for while until do done case esac in function return local export readonly set unset source exit echo cd exec'),
+      sql:words('select from where insert into values update set delete create table alter add drop index on join left right inner outer full cross group by order limit offset as and or not null is in primary key foreign references unique default constraint column if exists begin commit rollback returning distinct having union all case when then else end view trigger cascade varchar text integer bigint boolean timestamp')};
+    const LITERALS=words('true false null undefined None nil True False NaN this self Self');
+    function familyOf(file){const ext=(file.language||file.path.split('/').pop().split('.').pop()||'').toLowerCase();return FAMILY[ext]||'text';}
+    function wordClass(word,code,end,family){
+      if(/^[@$]/.test(word)) return 'lit';
+      if(LITERALS.has(word)) return 'lit';
+      if(KEYWORDS[family]?.has(family==='sql'?word.toLowerCase():word)) return 'kw';
+      const rest=code.slice(end,end+40);
+      if((family==='yaml'||family==='css')&&/^[ \t]*:/.test(rest)) return 'key';
+      if(/^ ?\(/.test(rest)) return 'fn';
+      if(/^[A-Z]/.test(word)&&family!=='sql') return 'ty';
+      return '';
+    }
+    function tokens(code,family){
+      const spec=COMPILED[family]; if(!spec) return [['',code]];
+      const out=[],re=spec.re; let last=0,match; re.lastIndex=0;
+      while((match=re.exec(code))){
+        if(!match[0].length){re.lastIndex++;continue;}
+        if(match.index>last) out.push(['',code.slice(last,match.index)]);
+        let cls=spec.classes[match.slice(1).findIndex(value=>value!==undefined)];
+        if(cls==='word') cls=wordClass(match[0],code,re.lastIndex,family);
+        else if(cls==='str'&&(family==='json'||family==='yaml')&&/^[ \t]*:/.test(code.slice(re.lastIndex,re.lastIndex+20))) cls='key';
+        out.push([cls,match[0]]); last=re.lastIndex;
+      }
+      if(last<code.length) out.push(['',code.slice(last)]);
+      return out;
+    }
+    function codeRows(file){
+      const family=familyOf(file),raw=file.code.replace(/\r\n?/g,'\n').replace(/\n$/,''),rows=[];
+      if(!file.diff){
+        let parts=[];rows.push({kind:'',parts});
+        for(const [cls,value] of tokens(raw,family)) value.split('\n').forEach((piece,i)=>{if(i){parts=[];rows.push({kind:'',parts});}if(piece)parts.push([cls,piece]);});
+        const first=file.start_line||1,width=String(first+rows.length-1).length;
+        rows.forEach((row,i)=>row.no=String(first+i).padStart(width));
+        return rows;
+      }
+      let before=file.start_line||1,after=before,inHunk=false;
+      for(const line of raw.split('\n')){
+        const hunk=/^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+        if(hunk){before=+hunk[1];after=+hunk[2];inHunk=true;rows.push({kind:'hunk',parts:[['',line]]});continue;}
+        if(!inHunk&&/^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename )/.test(line)||line.startsWith('\\')){rows.push({kind:'meta',parts:[['',line]]});continue;}
+        const mark=line[0]==='+'||line[0]==='-'?line[0]:' ',body=line[0]===mark?line.slice(1):line;
+        rows.push({kind:mark==='+'?'add':mark==='-'?'del':'',mark,parts:tokens(body,family),old:mark==='+'?'':before++,new:mark==='-'?'':after++});
+      }
+      const width=Math.max(1,...rows.filter(row=>row.mark!==undefined).flatMap(row=>[String(row.old).length,String(row.new).length]));
+      rows.forEach(row=>row.no=row.mark===undefined?' '.repeat(width*2+1):String(row.old).padStart(width)+' '+String(row.new).padStart(width));
+      return rows;
+    }
+    function editor(file){
+      const box=document.createElement('div');box.className='editor';
+      const bar=document.createElement('div');bar.className='editor-bar';
+      const dots=text('span','','dots');dots.setAttribute('aria-hidden','true');dots.append(document.createElement('i'),document.createElement('i'),document.createElement('i'));
+      const label=(file.diff?'Diff · ':'')+(file.language||file.path.split('/').pop().split('.').pop());
+      const copy=text('button','Copy','copy');copy.type='button';copy.setAttribute('aria-label','Copy code from '+file.path);
+      copy.onclick=async()=>{try{await navigator.clipboard.writeText(file.code);copy.textContent='Copied';}catch{copy.textContent='Copy failed';}setTimeout(()=>copy.textContent='Copy',1600);};
+      bar.append(dots,text('span',file.path,'name'),text('span',label,'lang'),copy);
+      const view=document.createElement('div');view.className='code';view.tabIndex=0;view.setAttribute('role','region');view.setAttribute('aria-label','Code: '+file.path);
+      const fragment=document.createDocumentFragment();
+      for(const row of codeRows(file)){
+        const line=document.createElement('div');line.className=('line '+row.kind).trim();line.append(text('span',row.no,'no'));
+        const source=document.createElement('span');source.className='src';
+        if(row.mark!==undefined) source.append(text('span',row.mark,'mark'));
+        for(const [cls,value] of row.parts) source.append(cls?text('span',value,'tk-'+cls):document.createTextNode(value));
+        line.append(source);fragment.append(line);
+      }
+      view.append(fragment);box.append(bar,view);return box;
+    }
+    function syncToggle(){const items=[...document.querySelectorAll('.file')];$('toggle-files').textContent=items.length&&items.every(item=>item.open)?'Collapse all':'Expand all';}
+    function renderFiles(){
+      const files=page.mode==='handoff'?(page.files||[]):[];
+      $('files').hidden=!files.length;$('file-list').replaceChildren();$('toggle-files').textContent='Expand all';
+      files.forEach((file,index)=>{
+        const item=document.createElement('details');item.className='file';item.id='file-'+index;
+        const summary=document.createElement('summary');const count=file.code.replace(/\n$/,'').split('\n').length;
+        const chevron=text('span','▶','chev');chevron.setAttribute('aria-hidden','true');
+        const where=file.diff?'Changes':file.start_line?'Lines '+file.start_line+'–'+(file.start_line+count-1):count+' lines';
+        summary.append(chevron,text('span',file.path,'file-path'),text('span',where,'file-meta'),text('span',file.why,'file-why'));
+        item.append(summary);
+        item.addEventListener('toggle',()=>{if(item.open&&!item.querySelector('.editor'))item.append(editor(file));syncToggle();});
+        $('file-list').append(item);
+      });
+      if(files.length){const link=text('a','Files worth reviewing');link.href='#files';$('contents').append(link);}
+    }
+    $('toggle-files').onclick=()=>{const items=[...document.querySelectorAll('.file')];const open=!items.every(item=>item.open);items.forEach(item=>item.open=open);};
     function choose(id) {
       if(!connected) return;
       selected=id; document.querySelectorAll('.option').forEach(e=>e.setAttribute('aria-checked',String(e.dataset.choice===id)));
@@ -83,6 +202,7 @@
       }
       const kinds={proposal:'Proposal before implementation',observed:'Observed result',explanation:'Explanation'};
       (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id='section-'+index;const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div',kinds[item.kind],'tag'),text('h2',item.title),text('p',item.body));card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
+      renderFiles();
       const labels={verified:'Verified',failed:'Failed',unverified:'Not checked'};
       $('verification').hidden=!(page.checks||[]).length;
       (page.checks||[]).forEach(item=>{const row=document.createElement('div');row.className='check';row.append(text('span',labels[item.status],'badge '+item.status));const detail=document.createElement('div');detail.append(text('strong',item.text),text('p',item.evidence,'evidence'));row.append(detail);$('checks').append(row);});

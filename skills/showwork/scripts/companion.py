@@ -24,6 +24,8 @@ from runtime import workspace
 TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "companion.html"
 MAX_BODY = 2 * 1024 * 1024
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+MAX_FILE = 512 * 1024  # one file read for "Files worth reviewing"
+MAX_CODE = 1536 * 1024  # all code shown on one page
 
 
 def directory(project):
@@ -45,6 +47,42 @@ def save_json(path, value):
 def require_text(value, field):
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be nonempty text")
+
+
+def line_number(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+def attach_code(project, files):
+    """Fill in each file's code from the project when the page did not include it."""
+    root = Path(project).resolve()
+    total = 0
+    for item in files:
+        if "code" not in item:
+            path = (root / item["path"]).resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                raise ValueError(f"File to review not found in the project: {item['path']}")
+            if ".git" in path.relative_to(root).parts or path.name.startswith(".env"):
+                raise ValueError(f"Refusing to show a git or environment file: {item['path']}")
+            if path.stat().st_size > MAX_FILE:
+                raise ValueError(f"{item['path']} is too large; pass lines or a code excerpt")
+            try:
+                code = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
+            if "lines" in item:
+                first, last = item.pop("lines")
+                rows = code.splitlines()
+                if first > len(rows):
+                    raise ValueError(f"{item['path']} has only {len(rows)} lines")
+                code = "\n".join(rows[first - 1:last])
+                item["start_line"] = first
+            if not code.strip():
+                raise ValueError(f"{item['path']} has no code to show")
+            item["code"] = code
+        total += len(item["code"].encode("utf-8"))
+    if total > MAX_CODE:
+        raise ValueError("Files to review hold too much code; show the changed parts with lines or a diff")
 
 
 def validate(page):
@@ -77,6 +115,29 @@ def validate(page):
                 require_text(item[key], key)
         if item in sections and item.get("kind") not in {"proposal", "observed", "explanation"}:
             raise ValueError("Section kind must be proposal, observed or explanation")
+    files = page.get("files", [])
+    if not isinstance(files, list):
+        raise ValueError("files must be a list")
+    if files and page["mode"] != "handoff":
+        raise ValueError("Only a handoff lists files to review")
+    for item in files:
+        if not isinstance(item, dict):
+            raise ValueError("Each file must be an object")
+        require_text(item.get("path"), "file path")
+        require_text(item.get("why"), "file why")
+        for key in ["code", "language"]:
+            if key in item:
+                require_text(item[key], f"file {key}")
+        if "diff" in item and not isinstance(item["diff"], bool):
+            raise ValueError("file diff must be true or false")
+        if "start_line" in item and not line_number(item["start_line"]):
+            raise ValueError("file start_line must be a positive integer")
+        if "lines" in item:
+            if "code" in item:
+                raise ValueError("Give a file either code or lines, not both")
+            span = item["lines"]
+            if not (isinstance(span, list) and len(span) == 2 and all(map(line_number, span)) and span[0] <= span[1]):
+                raise ValueError("file lines must be [first, last] line numbers")
     ids = []
     for option in options:
         require_text(option.get("id"), "option id")
@@ -109,6 +170,7 @@ def publish(project, source):
             name = hashlib.file_digest(stream, "sha256").hexdigest() + image.suffix.lower()
         copies.append((image, root / "assets" / name))
         item["image"] = "/assets/" + name
+    attach_code(project, page.get("files", []))
     for image, destination in copies:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(image, destination)

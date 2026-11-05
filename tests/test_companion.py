@@ -201,6 +201,45 @@ class CompanionTest(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(ValueError):
                 self.publish(invalid)
 
+    def test_files_to_review_read_code_from_the_project(self):
+        (self.project / "src").mkdir()
+        (self.project / "src" / "store.ts").write_text("one\ntwo\nthree\nfour\n")
+        page = copy.deepcopy(HANDOFF)
+        page["files"] = [
+            {"path": "src/store.ts", "why": "Saves tasks", "lines": [2, 3]},
+            {"path": "src/store.ts", "why": "Whole file"},
+            {"path": "api.py", "why": "Diff given by the author", "diff": True, "code": "@@ -1 +1 @@\n-a\n+b"},
+        ]
+        files = self.publish(page)["files"]
+        self.assertEqual((files[0]["code"], files[0]["start_line"]), ("two\nthree", 2))
+        self.assertNotIn("lines", files[0])
+        self.assertEqual(files[1]["code"], "one\ntwo\nthree\nfour\n")
+        self.assertEqual(files[2]["code"], "@@ -1 +1 @@\n-a\n+b")
+
+    def test_files_to_review_stay_inside_the_project(self):
+        outside = Path(self.temp.name).parent / "outside-showwork-test.txt"
+        (self.project / ".env").write_text("SECRET=1")
+        (self.project / "blob.bin").write_bytes(b"\xff\xfe\x00")
+        first = self.publish(HANDOFF)
+        cases = {"outside": {"path": "../" + outside.name}, "missing": {"path": "nope.py"}, "env": {"path": ".env"},
+                 "binary": {"path": "blob.bin"}, "both": {"path": "x.py", "code": "x", "lines": [1, 1]},
+                 "bad lines": {"path": "x.py", "lines": [3, 1]}, "no why": {"path": "x.py", "code": "x", "why": ""}}
+        outside.write_text("private")
+        try:
+            for name, extra in cases.items():
+                page = copy.deepcopy(HANDOFF)
+                page["files"] = [{"why": "Reason", **extra}]
+                with self.subTest(case=name), self.assertRaises(ValueError):
+                    self.publish(page)
+            decision = copy.deepcopy(DECISION)
+            decision["files"] = [{"path": "x.py", "why": "Reason", "code": "x"}]
+            with self.assertRaises(ValueError):
+                self.publish(decision)
+        finally:
+            outside.unlink()
+        with self.get("/api/view") as response:
+            self.assertEqual(json.load(response)["page"]["version"], first["version"])
+
     def test_events_cli_filters_previous_page(self):
         old = self.publish(DECISION)
         self.post({"version": old["version"], "choice": "board"}).close()

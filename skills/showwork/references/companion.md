@@ -13,7 +13,7 @@ The companion uses Python 3.11+ with no third-party runtime dependencies. It wor
 
 Write chat, page titles, captions and diagram labels in the user's language with short sentences and familiar words a third-grade child could understand. Speak to an adult respectfully; no baby talk, forced analogies or classroom tone. Start with what changed and why it helps, then what was checked and what remains uncertain. Usually a few sentences suffice in chat; do not repeat the whole report.
 
-Keep each browser section's visible explanation to one or two short sentences when possible. Show a useful picture or concrete example. Keep the key changed-file list visible; put longer source traces, commands, protocol names and supporting tables in native `<details><summary>Show details</summary>...</details>` (translate the label for other languages). Keep important findings, data-loss risks, failures and missing checks outside the collapsed details. Cover every materially changed area without turning the opening into a long technical account.
+Keep each browser section's visible explanation to one or two short sentences when possible. Show a useful picture or concrete example. Keep the key changed-file list visible (code opens from each file's accordion); put longer source traces, commands, protocol names and supporting tables in native `<details><summary>Show details</summary>...</details>` (translate the label for other languages). Keep important findings, data-loss risks, failures and missing checks outside the collapsed details. Cover every materially changed area without turning the opening into a long technical account.
 
 Use everyday labels first in diagrams; preserve exact route/table/field names nearby or in details so the explanation remains traceable. If a technical term is necessary, explain it on first use. For example: “Check whether the person is signed in” before the supporting label `auth middleware`; “Change how stored data is organized” before migration details. Never drop a meaningful branch, table relationship, finding severity or uncertainty just to shorten the page.
 
@@ -89,7 +89,7 @@ Do not busy-poll. Wait for the user to reply, or use a supported bounded wait wh
 
 ### Handoff page
 
-Use `mode: "handoff"`, `title`, `summary`, `sections`, and `checks`. It has no options or approval control.
+Use `mode: "handoff"`, `title`, `summary`, `sections`, `checks`, and optionally `files` (see **Files worth reviewing** below). It has no options or approval control.
 
 Each section requires `title`, `body`, one visual (`html` or `image`), and `kind`:
 - `observed`: an actual captured result, with provenance and what it demonstrates.
@@ -106,7 +106,20 @@ Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), an
 
 Read the complete relevant diff and list materially affected areas before authoring the handoff. Use the following coverage for areas that actually changed. Combine related areas when that improves understanding; do not force a fixed number of cards or cap a substantive change at three bullets.
 
-Add a visible **Files worth reviewing** section to a result walkthrough when files changed. Select the files a reader needs to inspect to understand the behavior, configuration, data change, or decisive verification. For each, show the repository-relative path and one short sentence saying what changed there and why that file matters to the result. Group tightly related files when that makes the list easier to scan; include every materially important file without dumping every generated or incidental file. Put line numbers, full diffs, and long source traces under expandable details. If the report only verifies existing work and no files changed in scope, say so instead of inventing a list. Use the existing `sections` array with an `explanation` section and simple HTML list or table; no new page field is needed.
+Add a **Files worth reviewing** list to a result walkthrough when files changed. Select the files a reader needs to inspect to understand the behavior, configuration, data change, or decisive verification; include every materially important file without dumping every generated or incidental file. Put them in the handoff's top-level `files` array, not in a section. Each one becomes a folded accordion showing the path and reason; opening it shows the real code in a read-only editor view with line numbers and syntax colors. If the report only verifies existing work and no files changed in scope, say so instead of inventing a list.
+
+```json
+"files": [
+  {"path": "src/billing/refund.ts", "why": "Refunds now return the chat to the pool it came from.", "lines": [40, 88]},
+  {"path": "app/Services/ChatLedger.php", "why": "Every refund is written to the ledger.", "diff": true, "code": "@@ -12,6 +12,9 @@ ...\n-old line\n+new line\n context"}
+]
+```
+
+- `path` (project-relative) and `why` (one short sentence: what changed there and why it matters) are required.
+- Without `code`, publishing reads the current file from the project, optionally only `lines: [first, last]`. This is the default because it shows the actual code. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
+- For what changed, pass `diff: true` with `code` set to the unified diff for that file (for example `git diff -U3 -- <path>`); added and removed lines are colored and numbered from the hunk headers.
+- `code` with `start_line` shows a pasted excerpt with correct line numbers. `language` overrides the extension-based coloring.
+- Show the changed region rather than a whole large file. Never include credentials or private payloads in code.
 
 | Changed area | What the browser should explain |
 | --- | --- |
