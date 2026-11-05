@@ -1,28 +1,28 @@
-# 예상 동작: 끝난 작업 살펴보기
+# Expected behavior: review finished work
 
-이 내용은 설명 방식의 예시이며 실제 앱을 검사한 결과가 아닙니다.
+This shows an explanation style, not the result of inspecting a real app.
 
-먼저 평소처럼 요청합니다.
+First, make an ordinary request.
 
-> 구독 취소 기능을 추가해줘.
+> Add subscription cancellation.
 
-Showwork는 켜지지 않습니다. 작업이 끝난 뒤 결과를 보고 싶을 때 입력합니다.
+Showwork stays off. After the work is done, invoke it when you want to see the result.
 
-> $showwork 방금 만든 구독 취소 기능을 보여줘.
+> $showwork Show me the subscription cancellation feature you just made.
 
-보고서는 결과부터 설명합니다.
+The report starts with the outcome.
 
-> 이제 구독을 취소하면 다음 결제가 멈춰요. 남은 이용 기간에는 계속 쓸 수 있어요.
+> Canceling now stops the next payment. You can keep using the subscription until the current period ends.
 
-실제 취소 화면이 있다면 캡처를 보여주고, 아래처럼 동작을 설명합니다. 코드와 확인한 자료에 맞는 내용만 넣습니다.
+If a real cancellation screen exists, show a capture and explain the behavior as below. Include only claims supported by the code and checked evidence.
 
 ```mermaid
 flowchart LR
-    A[구독 이용 중] -->|취소 누름| B[다음 결제 중단]
-    B -->|남은 기간에는| C[계속 이용 가능]
-    C -->|이용 기간 끝| D[이용 종료]
+    A[Subscription active] -->|Press Cancel| B[Next payment stops]
+    B -->|During remaining period| C[Access continues]
+    C -->|Period ends| D[Access ends]
 ```
 
-확인한 내용과 남은 문제를 따로 적습니다. 예를 들어 같은 취소 버튼을 두 번 눌러도 문제가 없는지 확인했다면 그 결과를 설명합니다. 실제 결제 연결을 시험하지 못했다면 그 점은 바로 보이게 남깁니다. 테스트용 흉내 화면을 실제 결제 증거라고 말하지 않습니다.
+List checks and remaining issues separately. For example, if you checked whether pressing Cancel twice is safe, explain the result. If you could not test the real payment integration, make that clear. Do not present a mock screen as evidence of a real payment flow.
 
-파일 위치와 검사 명령은 ‘자세히 보기’에 넣습니다. 채팅에는 짧은 결과와 브라우저 링크만 남깁니다. 결과 설명을 요청했다고 코드를 다시 고치거나 승인을 요구하지 않습니다.
+Put file locations and check commands under “Show details.” Leave a short outcome and browser link in chat. A request to explain results does not call for rewriting code or asking for approval.

@@ -8,9 +8,9 @@ disable-model-invocation: true
 
 Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task, not later unrelated work.
 
-The main deliverable is understanding the finished result: **what changed, how it works now, what was checked, and what remains unresolved**. Do not narrate the investigation, every tool call, or an eight-stage process. Keep progress updates brief and useful.
+The main deliverable is understanding the finished result: **what changed, how it works now, which changed files matter most, what was checked, and what remains unresolved**. Do not narrate the investigation, every tool call, or an eight-stage process. Keep progress updates brief and useful.
 
-Explain in the user's language with short sentences and familiar words a third-grade child could understand. Speak respectfully to an adult. Explain necessary technical terms immediately. Keep important failures and unchecked behavior visible; put paths, commands and supporting detail behind optional browser sections.
+Explain in the user's language with short sentences and familiar words a third-grade child could understand. Speak respectfully to an adult. Explain necessary technical terms immediately. Keep important failures and unchecked behavior visible; show the key changed files and why they matter, while placing commands and supporting detail behind optional browser sections.
 
 ## Establish the result
 
@@ -21,7 +21,7 @@ Explain in the user's language with short sentences and familiar words a third-g
 
 ## Show the outcome
 
-Read the [browser companion guide](references/companion.md) and publish a handoff page. Lead with the result and a concrete before/after example, then relevant visuals, checks and remaining problems. This is a walkthrough, not an approval gate.
+Read the [browser companion guide](references/companion.md) and publish a handoff page. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
 
 - **UI:** show actual resulting screens and important interactions when tools permit, with capture provenance. Label explanatory mockups separately.
 - **Routing:** show a connected flow/sequence diagram with actual branches, conditions and responses. Put route tables and source traces below it.

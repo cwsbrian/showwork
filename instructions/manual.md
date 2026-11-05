@@ -13,8 +13,9 @@ For an invoked command, read the matching skill under `{{SKILLS_ROOT}}`:
 - Verification: `{{SKILLS_ROOT}}/showwork-verify/SKILL.md`.
 - Adversarial review: `{{SKILLS_ROOT}}/showwork-adverial-review/SKILL.md`.
 
-Focus the result walkthrough on what changed, how it works now, what was actually
-checked, and remaining problems. Explain briefly with everyday words; put technical
-details behind expandable browser sections. Store reports, screenshots and one-off
-scripts in `/tmp` using the companion guide, never in the project. Do not turn a
+Focus the result walkthrough on what changed, how it works now, which changed files
+are worth reviewing and why, what was actually checked, and remaining problems.
+Explain briefly with everyday words; put longer technical details behind expandable
+browser sections. Store reports, screenshots and one-off scripts in `/tmp` using the
+companion guide, never in the project. Do not turn a
 request to explain completed work into new implementation or a planning ceremony.

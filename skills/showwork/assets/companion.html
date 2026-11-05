@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Showwork · 함께 보는 작업</title>
+  <title>Showwork · Work in view</title>
   <style>
     :root { color-scheme: light; --ink:#172f34; --muted:#52696b; --line:#d9e3e0; --accent:#116e60; --wash:#eef3f0; }
     * { box-sizing:border-box; } body { margin:0; background:var(--wash); color:var(--ink); font:16px/1.6 system-ui,sans-serif; }
@@ -29,17 +29,17 @@
   </style>
 </head>
 <body>
-  <header><div class="brand">showwork<span>.</span></div><div id="connection" role="status">연결 중</div></header>
+  <header><div class="brand">showwork<span>.</span></div><div id="connection" role="status">Connecting</div></header>
   <main>
-    <div id="empty">곧 여기에서 화면과 설명을 함께 볼 수 있습니다.</div>
+    <div id="empty">Screens and explanations will appear here soon.</div>
     <div id="content" hidden>
       <div id="mode" class="eyebrow"></div><h1 id="title"></h1><p id="summary"></p>
       <section id="decision" hidden aria-labelledby="question">
         <h2 id="question"></h2><div id="options" class="options" role="radiogroup" aria-labelledby="question"></div>
-        <div class="decision-actions"><button id="submit" disabled>이 안으로 선택</button><span id="selection-status" role="status">화면을 선택한 뒤 버튼을 누르세요.</span></div>
+        <div class="decision-actions"><button id="submit" disabled>Choose this option</button><span id="selection-status" role="status">Choose an option, then press the button.</span></div>
       </section>
-      <nav id="contents" aria-label="설명 목차" hidden></nav><div id="sections" class="section-grid"></div>
-      <section id="verification" hidden><h2>확인한 것과 남은 것</h2><div id="checks" class="checks"></div></section>
+      <nav id="contents" aria-label="Report contents" hidden></nav><div id="sections" class="section-grid"></div>
+      <section id="verification" hidden><h2>Checks and open questions</h2><div id="checks" class="checks"></div></section>
       <footer id="footer"></footer>
     </div>
   </main>
@@ -51,7 +51,7 @@
       if(item.image) {
         const img=document.createElement('img'); img.className='visual-image'; img.src=item.image; img.alt=item.title;
         if(!openOriginal) return img;
-        const wrapper=document.createElement('div');const link=text('a',item.title+' · 원본 이미지 열기 (새 탭)','card-copy');
+        const wrapper=document.createElement('div');const link=text('a',item.title+' · Open original image (new tab)','card-copy');
         link.href=item.image;link.target='_blank';link.rel='noopener';link.style.display='block';wrapper.append(img,link);return wrapper;
       }
       const frame=document.createElement('iframe'); frame.title=item.title; frame.setAttribute('sandbox','allow-same-origin');
@@ -61,40 +61,40 @@
     function choose(id) {
       if(!connected) return;
       selected=id; document.querySelectorAll('.option').forEach(e=>e.setAttribute('aria-checked',String(e.dataset.choice===id)));
-      $('submit').disabled=false; $('selection-status').textContent='선택 내용을 확인한 뒤 버튼을 누르세요.';
+      $('submit').disabled=false; $('selection-status').textContent='Review your choice, then press the button.';
     }
     function render(next) {
       observers.forEach(observer=>observer.disconnect());observers=[];
       page=next; selected=null; $('empty').hidden=!!page; $('content').hidden=!page; if(!page) return;
-      document.title=page.title+' · Showwork'; $('mode').textContent=page.mode==='decision'?'함께 결정하기':'작업 결과 살펴보기';
+      document.title=page.title+' · Showwork'; $('mode').textContent=page.mode==='decision'?'Choose together':'Review the result';
       $('title').textContent=page.title; $('summary').textContent=page.summary; $('decision').hidden=page.mode!=='decision';
       $('options').replaceChildren(); $('sections').replaceChildren(); $('checks').replaceChildren(); $('submit').disabled=true;
       $('contents').replaceChildren();$('contents').hidden=page.mode!=='handoff';$('sections').classList.toggle('handoff',page.mode==='handoff');
-      $('selection-status').textContent='화면을 선택한 뒤 버튼을 누르세요.';
+      $('selection-status').textContent='Choose an option, then press the button.';
       if(page.mode==='decision') {
         $('question').textContent=page.question;
         page.options.forEach((item,i)=>{
           const card=document.createElement('div'); card.className='card option'; card.tabIndex=0; card.setAttribute('role','radio'); card.setAttribute('aria-checked','false'); card.dataset.choice=item.id; card.setAttribute('aria-label',item.title);
-          card.append(visual(item)); const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div','제안 '+(i+1),'tag'));
+          card.append(visual(item)); const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div','Option '+(i+1),'tag'));
           const heading=text('h3','','option-label');heading.append(text('span','','radio'),text('span',item.title));copy.append(heading,text('p',item.body));card.append(copy);
           card.onclick=()=>choose(item.id);card.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();choose(item.id);}else if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)){e.preventDefault();const offset=['ArrowRight','ArrowDown'].includes(e.key)?1:-1;const target=(i+offset+page.options.length)%page.options.length;choose(page.options[target].id);$('options').children[target].focus();}};
           $('options').append(card);
         });
       }
-      const kinds={proposal:'구현 전 제안',observed:'실행 결과 · 작성자가 관찰',explanation:'이해를 위한 설명'};
+      const kinds={proposal:'Proposal before implementation',observed:'Observed result',explanation:'Explanation'};
       (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id='section-'+index;const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div',kinds[item.kind],'tag'),text('h2',item.title),text('p',item.body));card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
-      const labels={verified:'확인됨',failed:'실패',unverified:'미검증'};
+      const labels={verified:'Verified',failed:'Failed',unverified:'Not checked'};
       $('verification').hidden=!(page.checks||[]).length;
       (page.checks||[]).forEach(item=>{const row=document.createElement('div');row.className='check';row.append(text('span',labels[item.status],'badge '+item.status));const detail=document.createElement('div');detail.append(text('strong',item.text),text('p',item.evidence,'evidence'));row.append(detail);$('checks').append(row);});
-      $('footer').textContent=page.mode==='decision'?'선택은 이 질문에만 적용됩니다. 추가 의견은 채팅에 남겨주세요.':'관찰 결과와 설명용 시각화를 구분했습니다. 검증 표시는 작성자가 제공한 근거를 기준으로 합니다.';
+      $('footer').textContent=page.mode==='decision'?'Your choice applies only to this question. Share more feedback in chat.':'Observed results are separate from explanatory visuals. Check labels reflect the evidence provided by the author.';
     }
     $('submit').onclick=async()=>{
       const version=page.version, choice=selected; $('submit').disabled=true;
-      try { const response=await fetch('/api/choice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,choice})});if(!response.ok) throw new Error(response.status===409?'화면이 변경되었습니다. 최신 내용을 확인해주세요.':'선택을 저장하지 못했습니다.');
-        if(page.version===version)$('selection-status').textContent='선택을 기록했습니다. 채팅에서 계속할 수 있습니다.';
+      try { const response=await fetch('/api/choice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,choice})});if(!response.ok) throw new Error(response.status===409?'The page has changed. Review the latest version.':'Could not save your choice.');
+        if(page.version===version)$('selection-status').textContent='Choice saved. You can continue in chat.';
       }catch(error){$('selection-status').textContent=error.message;if(page.version===version)$('submit').disabled=!connected;}
     };
-    async function poll() { try {const response=await fetch('/api/view');if(!response.ok)throw new Error('connection');const data=await response.json();connected=true;$('connection').textContent='● 연결됨';if(data.page?.version!==page?.version)render(data.page);}catch{connected=false;$('connection').textContent='연결 끊김 · 마지막 화면';$('submit').disabled=true;}finally{setTimeout(poll,1000);} }
+    async function poll() { try {const response=await fetch('/api/view');if(!response.ok)throw new Error('connection');const data=await response.json();connected=true;$('connection').textContent='● Connected';if(data.page?.version!==page?.version)render(data.page);}catch{connected=false;$('connection').textContent='Disconnected · Last page';$('submit').disabled=true;}finally{setTimeout(poll,1000);} }
     // The first response sets an HttpOnly cookie; keep the key out of the address bar.
     if(location.search) history.replaceState(null,'',location.pathname);
     poll();

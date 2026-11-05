@@ -1,130 +1,126 @@
-# 검증 기록
+# Validation record
 
-## 0.5.0 명령을 입력할 때만 결과 설명
+## 0.5.0 Result walkthrough only on explicit command
 
-2026-10-08, Python 검사 51개와 npm 설치·업데이트 검사 2개가 통과했습니다. 이전 자동 안내를 Codex·Claude 양쪽에서 명령 전용 안내로 바꾸면서 사용자 글을 보존하는지 확인했습니다. 반복 설치도 같은 결과를 유지합니다. 삭제한 요청별 훅의 검사 4개는 제거하고, 이전 지침을 갱신하는 검사를 추가했습니다.
+On 2026-10-08, 51 Python checks and two npm installation/update checks passed. We checked that older automatic guidance became command-only guidance for Codex and Claude while preserving user-written text. Reinstalling produced the same result. Four tests for the removed per-prompt hook were removed, and a test for updating older instructions was added.
 
-실제 npm 패키지로 설치한 다섯 스킬 모두 Codex의 `allow_implicit_invocation: false`와 Claude의 `disable-model-invocation: true` 설정을 갖는지 확인했습니다. Codex의 실제 `skills/list` 응답에서도 다섯 스킬이 오류 없이 읽혔습니다. 이 응답에는 자동 호출 정책 값이 포함되지 않으므로, 목록에 보인다는 사실만으로 자동 호출 차단을 실행 검증했다고 보지는 않습니다. Claude strict plugin validate도 통과했습니다.
+All five skills installed from the actual npm package had Codex `allow_implicit_invocation: false` and Claude `disable-model-invocation: true`. Codex's real `skills/list` response also loaded all five without error. That response does not include the invocation policy, so appearing in the list alone does not prove automatic invocation is blocked at runtime. Claude strict plugin validation passed.
 
-기존 skill-creator의 간단 형식 검사기는 Claude의 공식 `disable-model-invocation` 필드를 허용하지 않아 실패했습니다. 해당 필드는 Claude의 수동 실행 설정에 필요하므로 유지했습니다. 실제 Codex 로딩과 패키지 내 설정 검사를 별도로 수행했습니다. 새 Codex·Claude 대화에서 일반 요청과 직접 명령의 응답을 비교하는 검사는 아직 하지 않았습니다. 이미 열린 세션에는 이전 지침이 남을 수 있으므로 업데이트 뒤 새 세션을 여세요.
+The old skill-creator quick format validator rejected Claude's official `disable-model-invocation` field. We kept that field because Claude requires it for manual invocation. We separately checked actual Codex loading and the packaged settings. We have not yet compared ordinary requests and direct commands in new Codex and Claude conversations. Open a new session after updating because an existing session may retain older instructions.
 
-이번 변경은 명령 설정과 설명 지침입니다. 브라우저 실행 코드는 바꾸지 않았으며, 결과 보고서를 자동으로 열지 않았습니다.
+This change affected command settings and explanation guidance. Browser runtime code was unchanged, and no result report was opened automatically.
 
+## 0.4.3 Temporary files outside the project
 
-## 0.4.3 임시 파일은 프로젝트 밖에 저장
+On 2026-10-08, 54 Python checks, two npm installation/update checks, and 17 Chromium checks passed. We verified that reports and check records appeared under `/tmp` without creating `.showwork` in the project. The same project resolves to the same temporary path; different projects use different paths. World-readable directories and deceptive linked directories are rejected. Writing new logs to old in-project records is also rejected.
 
-2026-10-08, Python 검사 54개, npm 설치·업데이트 검사 2개, Chromium 검사 17개가 통과했습니다. 보고서와 검사 기록이 `/tmp`에 생기고 프로젝트에 `.showwork`를 만들지 않는지 확인했습니다. 같은 프로젝트는 같은 임시 경로를 찾고, 다른 프로젝트는 다른 경로를 사용합니다. 다른 사용자가 읽을 수 있는 폴더나 연결된 가짜 폴더는 거부합니다. 예전 프로젝트 안의 검사 기록에 새 로그를 쓰는 것도 거부합니다.
+The new path command ran from both Codex and Claude installations made from the actual package. We also checked that no Python cache files were written inside the skill. In the browser, choice saving, automatic updates, captured image display, original-image access, and narrow-screen checks passed. These captures were saved in `/tmp/showwork-visual-test-FGTHSw`. All five skill format checks and Claude plugin validation passed.
 
-실제 패키지로 설치한 Codex·Claude 양쪽에서 새 경로 명령을 실행했습니다. 스킬 안에 Python 캐시 파일을 만들지 않는 것도 확인했습니다. 브라우저에서는 선택 저장, 자동 갱신, 캡처 표시, 원본 열기와 작은 화면 검사가 통과했습니다. 이번 캡처는 `/tmp/showwork-visual-test-FGTHSw`에 저장했습니다. 다섯 스킬 형식 검사와 Claude 플러그인 검사도 통과했습니다.
+Older `.showwork` data in this repository was moved to a temporary directory after stopping the previous server. Data in other projects was not moved or deleted automatically. Windows was not checked. Temporary files may disappear when the OS cleans them.
 
-이 저장소의 예전 `.showwork` 자료는 기존 서버를 멈춘 뒤 임시 폴더로 옮겼습니다. 다른 프로젝트의 자료를 자동으로 옮기거나 지우지는 않습니다. Windows 실행은 확인하지 않았습니다. 임시 파일은 운영체제가 정리하면 사라질 수 있습니다.
+## 0.4.2 Simple explanations
 
+All five skills and automatic guidance were changed to use familiar words and short sentences in chat and browser reports. Detailed technical material remains expandable; important problems and unchecked points stay visible. Format checks for the five skills and two npm installation/update checks passed. Codex and Claude user installations were also updated. We have not verified that every future conversation reaches the same level of simplicity.
 
-## 0.4.2 쉬운 설명
+## 0.4.1 Original captures and report-writing responsibilities
 
-채팅과 브라우저 설명을 쉬운 말과 짧은 문장으로 쓰도록 다섯 스킬과 자동 지침을 바꿨습니다. 자세한 기술 자료는 펼쳐볼 수 있게 두고, 중요한 문제와 미확인 내용은 바로 보이게 남깁니다. 다섯 스킬의 형식 검사와 npm 설치·업데이트 검사 2개가 통과했습니다. Codex와 Claude 사용자 설치도 갱신했습니다. 앞으로 모든 대화에서 같은 수준으로 쉽게 설명하는지는 아직 확인하지 않았습니다.
+On 2026-10-08, 50 Python checks, two npm integration checks, and 17 Chromium checks passed. We opened the original link for a tall image with the Enter key, verified that it decoded at original size in an authenticated new tab, and checked that `opener` was blocked. Image choice cards had no link and still selected on click. A 390px horizontal-overflow check also passed. Skill format checks and Claude strict plugin validation passed.
 
+Shared instructions assign report authoring to Luna/Haiku while the main model remains responsible for app control, capture, judgments, and final inspection. This guidance uses model selection when the runtime supports it; neither the server nor installer forces a model change. Actual Haiku delegation, native mobile execution, and cost savings were not verified.
 
-## 0.4.1 캡처 원본과 렌더링 역할 분리
+## 0.4.0 Adverial review command and mobile evidence guidance
 
-2026-10-08, Python 50개, npm 통합 검사 2개, Chromium 검사 17개가 통과했습니다. 긴 이미지의 원본 링크를 키보드 Enter로 열어 인증된 새 탭에서 원본 크기로 디코드되는 것과 opener 차단을 확인했습니다. 이미지 선택 카드에는 링크가 생기지 않고 클릭 선택이 유지됩니다. 390px 화면의 가로 넘침 검사도 통과했습니다. 스킬 형식 검사와 Claude strict plugin validate가 통과했습니다.
+On 2026-10-08, 50 Python checks and two npm integration checks passed. We verified the update that adds only the new review skill to an installation of the previous four, plus packaged installation and relative references on both Codex and Claude. Changed-skill format checks and Claude strict plugin validation passed; the local plugin list showed `showwork@inline` 0.4.0 enabled.
 
-공유 지침에 보고서 작성용 Luna/Haiku 위임과 현재 모델의 조작·캡처·판정·최종 검수 책임을 명시했습니다. 이는 실행 환경의 모델 선택 기능을 사용하는 지침이며 서버나 설치기가 모델을 강제로 바꾸지는 않습니다. Haiku 실제 위임, 네이티브 모바일 실행, 비용 절감량은 확인하지 않았습니다.
+The 15 Chromium checks included copying a real browser capture into companion assets, decoding it, and displaying it. At first, temporary Playwright tools were unavailable, so the check could not run. It passed after installing development tools in a temporary path outside the project. No product runtime dependency was added.
 
+An independent agent used the new skill to review a local diff in a separate React Native source example. It found a deletion-condition defect, reproduced four failing cases with the current handler and four passing baseline controls at HEAD, and published a localhost report with source locations, severity, a branch diagram, and runtime gaps. The report's actual browser capture was inspected. The example app source was not changed.
 
-## 0.4.0 Adverial review 명령과 모바일 증거 지침
+That example lacked a runnable native project, dependencies, and artifacts. Android/iOS commands failed because `react-native` was missing. Without an Android emulator/AVD or iOS Xcode, real mobile launch, interaction, and capture were reported as unverified. Node handler reproduction and a browser report capture are not evidence of native app execution. A complete success path in a real iOS/Android app, all agent response quality, and Windows execution were outside this validation scope.
 
-2026-10-08, Python 50개와 npm 통합 검사 2개가 통과했습니다. 기존 네 스킬 설치에서 새 리뷰 스킬만 추가되는 업데이트와 Codex·Claude 양쪽의 패키지 설치/상대 참조를 확인했습니다. 변경된 스킬 형식 검사와 Claude strict plugin validate가 통과했고, 로컬 플러그인 목록에 showwork@inline 0.4.0이 활성화됨을 확인했습니다.
+## 0.3.1 Connected routing diagrams and ERDs
 
-Chromium 검사 15개는 실제 브라우저 캡처가 companion assets로 복사되어 디코드·표시되는 검사를 포함합니다. 처음에는 임시 Playwright 도구가 없어 실행하지 못했으며, 프로젝트 밖 임시 경로에 개발용 도구를 설치한 뒤 통과했습니다. 제품 실행 의존성은 추가하지 않았습니다.
+On 2026-10-07, 49 Python checks and two npm integration checks passed. We checked the format of two changed skills and inclusion of SVG examples in the npm package. In real Chromium, we checked routing and ERD SVG rendering, accessible names, expandable supporting tables, no horizontal page overflow at 390px, and keyboard horizontal scrolling. A desktop capture led us to split a long node label across two lines.
 
-독립 에이전트가 새 스킬로 별도 React Native 소스 예제의 로컬 diff를 리뷰했습니다. 삭제 조건의 결함을 찾아 현재 핸들러 4개 사례 실패/HEAD 대조군 4개 통과를 재현하고, 소스 위치·심각도·분기 다이어그램·런타임 공백을 담은 localhost 보고서를 게시했습니다. 해당 보고서의 실제 브라우저 캡처도 확인했습니다. 평가 앱 소스는 수정하지 않았습니다.
+The guidance and examples specify per-branch responses, FK-to-PK links, cardinalities, and before/after markings. The examples use fictional APIs and schemas; they do not prove routing in a user app or an executed database migration. Whether the model chooses this form for every task remains unverified.
 
-이 예제에는 실행 가능한 네이티브 프로젝트·의존성·산출물이 없었고, Android/iOS 명령은 react-native 부재로 실패했습니다. Android emulator/AVD와 iOS Xcode도 없어 실제 모바일 실행·조작·촬영은 미검증으로 보고했습니다. Node 핸들러 재현과 브라우저 보고서 캡처는 네이티브 앱 실행 증거가 아닙니다. 실제 iOS/Android 앱에서의 전체 성공 경로, 모든 에이전트 응답의 품질, Windows 실행은 이번 검증 범위 밖입니다.
+## 0.3.0 Detailed result explanation and Claude user installation
 
-## 0.3.1 연결된 라우팅 다이어그램과 ERD
+On 2026-10-07 in Linux, 49 Python tests, two npm integration checks, and 14 real Chromium checks passed. Python checks covered custom Claude configuration paths, preservation of existing `CLAUDE.md` and `settings.json`, update backups and rollback on failure, and preflight checks before installing either tool. npm checks covered installing both tools by default, selecting only Claude, and updating both skills to a new Git commit using the same cache.
 
-2026-10-07, Python 49개와 npm 통합 검사 2개가 통과했습니다. 두 변경 스킬의 형식 검증과 npm 패키지의 SVG 예시 포함을 확인했습니다. 실제 Chromium에서 라우팅·ERD 예시의 SVG 렌더링, 접근성 이름, 보조 표 펼침, 390px 화면의 가로 넘침 방지 및 키보드 가로 스크롤을 확인했습니다. 데스크톱 캡처를 확인해 긴 노드 이름을 두 줄로 나눴습니다.
+In the browser, we checked the existing choice/verification flow, full-width explanations, tables taller than 760px, height changes when details expand, contents navigation, and mobile width and height. Real desktop and mobile captures were saved to the local `.showwork/visual-test/` path at the time. The detailed table was a rendering fixture, not evidence of a migration applied to a real app.
 
-지침과 예시는 분기별 응답, FK→PK 연결, 관계 수, 전후 변경 표시를 구체화합니다. 예시는 가상 API·스키마이며 사용자 앱의 라우팅 검증이나 실행된 DB 마이그레이션을 뜻하지 않습니다. 실제 모델이 모든 작업에서 이 표현을 선택하는지는 미검증입니다.
+Guidance for changed areas includes routing, schema/migrations, and architecture. It distinguishes source-derived explanations from runtime observations and authored migrations from executed ones. Better guidance and rendering tests alone do not prove the quality of all agent explanations. Windows execution and long-term use across products were not verified.
 
-## 0.3.0 상세 완료 설명과 Claude 사용자 설치
+## 0.2.3 Updates with the same command
 
-2026-10-07, Linux에서 Python 테스트 49개, npm 통합 검사 2개, 실제 Chromium 검사 14개가 통과했습니다. Python 검사는 Claude 사용자 지정 설정 경로, 기존 CLAUDE.md·settings.json 보존, 업데이트 백업과 실패 복원, 두 도구 설치 전 사전 검사를 포함합니다. npm 검사는 기본 명령으로 두 도구 설치, Claude 단독 선택, 같은 캐시로 새 Git 커밋을 받아 양쪽 스킬을 갱신하는 동작을 확인합니다.
+On 2026-10-06 in Linux, 46 Python tests and two npm integration checks passed. The installer backs up changed skills before replacement, including user edits and files removed from the distribution. Additional checks covered applying a new version, repeating identical installation, lock and backup path protection, and rollback after failures during preparation, replacement, or instruction writing. Interruptions immediately after moving files and immediately after atomic instruction writing were also reproduced to verify restoration.
 
-브라우저에서는 기존 선택/검증 흐름과 함께 전체 너비 설명, 760px를 넘는 긴 표, 펼침 설명에 따른 높이 조절, 목차 이동, 모바일 너비·높이를 확인했습니다. 실제 데스크톱·모바일 캡처는 로컬 `.showwork/visual-test/`에 있습니다. 상세 표는 렌더링 검사용 예시이며 실제 앱에 마이그레이션을 적용했다는 증거가 아닙니다.
+The npm check installed a first commit from a temporary Git repository, made a second commit, then used **the same npx command and cache** again. The new commit's skills were installed and removed files disappeared even though the package version string was unchanged. This checked updates without a new package URL or cache deletion. Windows execution and automatic recovery after forced OS shutdown were not verified.
 
-변경 영역별 설명 지침은 라우팅·스키마/마이그레이션·아키텍처를 포함합니다. 소스 기반 설명과 실행 관찰, 작성된 마이그레이션과 실제 실행을 구분하도록 했습니다. 지침 보강이나 렌더링 검사만으로 모든 에이전트 응답의 설명 품질을 입증하지는 않습니다. Windows 실행과 전체 제품별 장기 사용은 미검증입니다.
+## 0.2.2 User installation by default
 
-## 0.2.3 같은 명령으로 업데이트
+On 2026-10-06 in Linux, 43 Python tests and an npm package installation check passed. New checks isolated the user home and covered installation under `~/.agents/skills`, preservation of global instructions, reruns, protection of modified skills, custom `CODEX_HOME` and active overrides, and rejection of malformed instructions or symlinks. Existing project installation was checked with explicit `--target`, which is rejected when combined with `--user`. Windows execution and every project-specific response from a real model were outside this scope.
 
-2026-10-06, Linux에서 Python 테스트 46개와 npm 통합 검사 2개가 통과했습니다. 설치기는 바뀐 스킬을 백업 후 교체하며, 사용자 수정과 배포판에서 제거된 파일도 백업에 남습니다. 추가 검사는 새 버전 적용, 같은 내용 재실행, 잠금·백업 경로 보호, 준비·중간 교체·지침 쓰기 실패 시 복원을 확인합니다. 파일 이동 직후와 지침의 원자적 쓰기 직후 발생한 중단도 재현해 복원을 검증했습니다.
+## 0.2.1 npx installation
 
-npm 검사는 임시 Git 저장소의 첫 커밋을 설치한 뒤 두 번째 커밋을 만들고 **같은 npx 명령과 캐시**를 다시 사용했습니다. 패키지 버전 문자열을 바꾸지 않아도 새 커밋의 스킬이 설치되고 제거된 파일이 사라지는 것을 확인했습니다. 별도의 새 패키지 URL이나 캐시 삭제 없이 업데이트되는지 검증하기 위한 검사입니다. Windows 실행과 운영체제 강제 종료 시 자동 복구는 미검증입니다.
+On 2026-10-06 in Linux, 40 Python tests and the `npm test` package installation integration check passed. The integration check ran an actual `npm pack` result from npm cache and covered default project installation, a path with spaces from another working directory, reinstallation, preservation of user changes, rejection of invalid arguments, and guidance when Python is missing. The package contained the installer, four skills, and browser companion, with no external npm dependencies. Windows execution was unverified.
 
-## 0.2.2 사용자 설치가 기본
+## 0.2.0 Conditional visual choices and browser result walkthrough
 
-2026-10-06, Linux에서 Python 테스트 43개와 npm 패키지 설치 검사가 통과했습니다. 새 검사는 사용자 홈을 격리해 `~/.agents/skills` 설치, 전역 지침 보존, 재실행, 수정된 스킬 보호, 사용자 지정 `CODEX_HOME`과 활성 override, 잘못된 지침·심볼릭 링크 거부를 확인합니다. 기존 프로젝트 설치는 `--target`을 명시해 검증하며 `--user`와 동시에 지정하면 거부합니다. Windows 실행과 실제 모델의 모든 프로젝트별 응답은 이 검사 범위에 포함되지 않습니다.
+On 2026-10-06 in Linux, 40 Python tests passed, including existing tests and new companion checks. Thirteen browser-server checks made real HTTP requests for page delivery, choice recording, stale-page rejection, session authentication, file boundaries, and multiple-session cookies. Skill and plugin format checks also passed.
 
-## 0.2.1 npx 설치
+Running `tests/browser_companion.cjs` with Playwright and Chromium checked ten items: actual page rendering, isolation of embedded HTML scripts, keyboard choice, saved choice, automatic result-page update, no approval button on the result page, stale-page choice rejection, no mobile horizontal overflow, authentication after reload, and connection state after server shutdown. Desktop and mobile captures were inspected. At the time, captures and machine-readable results were saved in local `.showwork/visual-test/`.
 
-2026-10-06, Linux에서 Python 테스트 40개와 `npm test`의 패키지 설치 통합 검사가 통과했습니다. 통합 검사는 실제 `npm pack` 결과를 npm 캐시에서 실행해 기본 프로젝트 설치, 다른 작업 폴더에서 공백 경로 지정, 재설치, 사용자 변경 보존, 잘못된 인자 거부, Python 누락 안내를 확인합니다. 패키지에는 설치기·네 스킬·브라우저 companion만 포함하며 외부 npm 의존성이 없습니다. Windows 실행은 미검증입니다.
-
-## 0.2.0 조건부 시각적 선택과 브라우저 완료 설명
-
-2026-10-06, Linux에서 기존 테스트와 새 companion 검사를 합쳐 40개 Python 테스트를 확인했습니다. 브라우저 서버의 13개 검사는 실제 HTTP 요청으로 페이지 전달, 선택 기록, 이전 화면 선택 거부, 세션 인증, 파일 범위, 다중 세션 쿠키를 검증합니다. 스킬·플러그인 형식 검사도 통과했습니다.
-
-`tests/browser_companion.cjs`를 Playwright와 Chromium으로 실행하여 다음 10개 항목을 확인했습니다: 실제 화면 렌더링, 삽입 HTML 스크립트 격리, 키보드 선택, 선택 기록, 완료 화면 자동 갱신, 완료 화면의 승인 버튼 없음, 이전 화면 선택 거부, 모바일 가로 넘침 없음, 새로고침 인증 유지, 서버 종료 후 연결 상태 표시. 데스크톱·모바일 캡처를 직접 확인했습니다. 캡처와 기계 판독 결과는 로컬 `.showwork/visual-test/`에 저장됩니다.
-
-브라우저 검사는 플러그인 실행 의존성이 아닌 개발용 선택 검사입니다. Playwright와 Chromium이 있는 환경에서 실행하세요.
+The browser check is an optional development check, not a plugin runtime dependency. Run it where Playwright and Chromium are available.
 
 ```bash
 NODE_PATH=/path/to/node_modules node tests/browser_companion.cjs
 ```
 
-기존 Chromium을 사용하려면 `SHOWWORK_CHROMIUM=/absolute/path/to/chrome`도 지정할 수 있습니다. 초기 실행에서 설치된 Playwright가 기대한 브라우저 버전이 없어, 이 환경에서는 이미 설치된 Chromium 실행 경로를 지정해 검증했습니다.
+You can point `SHOWWORK_CHROMIUM=/absolute/path/to/chrome` to an existing Chromium. The first attempt lacked the browser revision expected by the installed Playwright, so this environment used an existing Chromium executable for validation.
 
-이 검증은 companion 자체의 동작을 확인합니다. 실제 에이전트가 모든 요청에서 올바르게 선택 여부를 판단하는지, 사용자의 별도 할 일 앱이 완성됐는지까지 입증하지 않습니다. 브라우저 클릭은 기록되며, 대기 중인 에이전트를 자동 호출하는 기능은 포함하지 않습니다. 원격 환경의 포트 전달과 Windows 브라우저 실행은 확인하지 않았습니다.
+These checks establish companion behavior. They do not prove that agents always choose correctly whether to ask for a decision, or that a separate user task app was completed. Browser clicks are recorded but do not automatically invoke a waiting agent. Remote port forwarding and Windows browser execution were not checked.
 
-## 0.1.1 자동 적용 연결
+## 0.1.1 Automatic invocation connection
 
-일반 요청에도 스킬을 읽도록 Codex 프로젝트 지침 설치와 Claude `UserPromptSubmit` 훅을 추가했습니다. 2026-10-06에 `python3 -m unittest discover -s tests -v`로 총 27개 테스트가 통과했습니다. Codex 번들 매니페스트 검사와 Claude의 strict 매니페스트 검사도 통과했습니다. 기존 0.1.0 검증은 아래에 보존합니다.
+Codex project instructions and a Claude `UserPromptSubmit` hook were added so skills were read on ordinary requests. On 2026-10-06, all 27 tests passed with `python3 -m unittest discover -s tests -v`. Codex bundle manifest and Claude strict manifest checks also passed. The original 0.1.0 checks remain below.
 
-추가 검사는 일반 한국어 요청에 훅이 지침을 전달하는지, 실제 등록된 훅 명령이 공백 있는 설치 경로에서도 실행되는지, Codex 설치가 기존 지침을 보존하는지, override를 사용하는지, 이전 스킬 전용 설치에 자동 연결을 추가하는지 확인합니다. 이 검사는 연결을 검증하며 실제 모델의 모든 응답이 지침을 따르는 것을 보장하지 않습니다.
+Additional checks covered whether the hook supplied guidance on an ordinary Korean-language request, whether the registered hook ran from an installation path with spaces, whether Codex installation preserved existing instructions and used overrides, and whether it added automatic guidance to a former skills-only installation. These checks verified the connection, not that every real model response obeyed the guidance.
 
-## 초기 0.1.0 기록
+## Initial 0.1.0 record
 
-2026-10-06, Linux와 Python 3.12.3에서 검증했습니다. Codex CLI는 0.153.4, Claude Code는 2.1.290이었습니다.
+Validation on 2026-10-06 used Linux and Python 3.12.3. Codex CLI was 0.153.4 and Claude Code was 2.1.290.
 
-## 실행 검증
+## Runtime checks
 
-- `python3 -m unittest discover -s tests -v`: 증거 처리 15개와 설치 1개, 총 16개 테스트 통과.
-- Codex plugin-creator의 공식 번들 검증기로 `.codex-plugin/plugin.json` 검증 통과.
-- skill-creator의 `quick_validate.py`로 공통 스킬 네 개의 형식 검증 통과.
-- `claude plugin validate . --strict --json`: 오류·경고 없이 통과.
-- `claude --plugin-dir <showwork 절대 경로> plugin list --json`: `showwork@inline`, 버전 `0.1.0`, `scope=session`, `enabled=true` 확인.
-- 임시 프로젝트에 Codex 스킬 설치 후 재설치 무변경, 충돌 시 기존 파일 보존 확인.
+- `python3 -m unittest discover -s tests -v`: 15 evidence handling checks and one installation check; 16 passed in total.
+- `.codex-plugin/plugin.json` passed the official bundle validator from Codex plugin-creator.
+- Four shared skills passed skill-creator's `quick_validate.py` format check.
+- `claude plugin validate . --strict --json` passed without errors or warnings.
+- `claude --plugin-dir <absolute path to showwork> plugin list --json` showed `showwork@inline` version `0.1.0`, `scope=session`, and `enabled=true`.
+- After installing Codex skills into a temporary project, reinstalling made no changes and conflicts preserved existing files.
 
-자동 테스트는 실제 하위 프로세스의 성공·실패·시간 초과, 출력 저장, 명령 인자 보존, 첨부 파일 복사, 파일 변조·누락, 동시 기록, SIGTERM 정리를 확인합니다. 설치 테스트는 다른 사용자 파일과 심볼릭 링크 경계를 확인합니다.
+Automated tests covered real subprocess success, failure, and timeout; saved output; command argument preservation; copied attachments; changed or missing files; concurrent recording; and SIGTERM cleanup. Installation tests checked other user files and symlink boundaries.
 
-## 스킬 행동 검토
+## Skill behavior review
 
-독립 에이전트가 스킬 원문과 임시 저장소를 사용해 다음 요청의 처리 흐름을 검토했습니다.
+An independent agent used the skill text and a temporary repository to review how these requests would be handled.
 
-| 요청 | 확인한 처리 |
+| Request | Observed handling |
 | --- | --- |
-| 푸터 오타 수정 | 짧은 조사·수정·검사로 처리 |
-| 취소 정책이 없는 구독 취소 기능 | 결과에 영향을 주는 정책 결정만 질문 |
-| 두 커밋과 로컬 변경의 리뷰 | 커밋 전체, staged·unstaged·관련 untracked 파일까지 범위에 포함 |
-| 브라우저 없는 모바일 결제 검증 | 테스트 통과와 별개로 화면·상호작용은 미검증 |
-| 이미 기간 말 취소로 합의한 기능 구현 | 같은 결정을 재승인받지 않고 진행 |
+| Fix a footer typo | Brief investigation, edit, and check |
+| Add subscription cancellation without a cancellation policy | Ask only for the policy decision that affects the result |
+| Review two commits and local changes | Include both commits, staged and unstaged changes, and relevant untracked files |
+| Verify mobile payment without a browser | Mark screen and interaction unverified despite passing tests |
+| Implement a feature already agreed to cancel at period end | Proceed without asking for the same approval again |
 
-이는 스킬 행동의 시뮬레이션 검토입니다. 실제 고객 앱에서 Claude와 Codex의 전체 세션을 비교한 평가 결과는 아닙니다.
+This was a simulated review of skill behavior, not an evaluation comparing full Claude and Codex sessions in real customer apps.
 
-이 검토에서 증거 기록의 동시 쓰기 손실과 SIGTERM 후 자식 프로세스가 남는 문제가 발견됐습니다. 잠금 안에서 최신 기록에 합치는 방식과 프로세스 그룹 정리를 적용했고, 두 문제의 회귀 테스트를 추가했습니다.
+The review found that concurrent evidence writes could lose data and that child processes could remain after SIGTERM. The recorder was changed to merge the latest record under a lock and clean up process groups, with regression tests for both issues.
 
-## 검증 범위
+## Validation scope
 
-초기 버전에서는 매니페스트·로컬 로딩·설치·기록 도구를 확인했습니다. Codex 네이티브 마켓플레이스 설치, Windows 동작, 실제 앱에 대한 장기 사용은 이 검증에 포함하지 않았습니다. 스킬은 모델의 행동을 유도하며, 강제 정책 엔진처럼 항상 동일한 실행이나 차단을 보장하지 않습니다.
+The initial version checked manifests, local loading, installation, and the recorder. Codex native marketplace installation, Windows behavior, and long-term use in real apps were outside that validation. Skills guide model behavior; they do not act as a policy engine that always forces the same execution or block.
 
-현재 버전의 로그와 캡처는 `/tmp`에 저장합니다. 이전 버전 항목의 `.showwork/` 경로는 당시 검증 기록입니다. 공유할 결과는 내용을 확인한 뒤 전달하세요.
+Current-version logs and captures are stored under `/tmp`. Paths under `.showwork/` in older entries describe where validation artifacts were kept at that time. Review the contents before sharing results.

@@ -1,27 +1,27 @@
-# Showwork 설치와 업데이트
+# Install and update Showwork
 
-Showwork 0.5.0은 기본적으로 **Codex와 Claude Code 둘 다 사용자 단위로 설치**합니다. Node.js 20 이상(npm/npx 포함), Git, Python 3.11 이상이 필요합니다.
+Showwork 0.5.0 installs **for both Codex and Claude Code at the user level** by default. It requires Node.js 20 or newer (including npm/npx), Git, and Python 3.11 or newer.
 
-## 설치·업데이트는 같은 명령
+## One command for installation and updates
 
-어느 폴더에서든 실행하세요.
+Run from any directory:
 
 ```bash
 npx --yes github:cwsbrian/showwork
 ```
 
-처음에는 설치하고, 다음부터는 GitHub 기본 브랜치의 최신 커밋으로 갱신합니다. 설치 후 원하는 도구에서 **새 채팅/세션**을 여세요. 프로젝트마다 반복 설치할 필요가 없습니다.
+The first run installs Showwork; later runs update it to the latest commit on GitHub's default branch. Open a **new chat or session** in the tool you want to use afterward. You do not need to install it separately in every project.
 
-| 도구 | 사용자 스킬 | 명령 전용 안내 | 백업 |
+| Tool | User skills | Command-only guidance | Backup |
 | --- | --- | --- | --- |
 | Codex | `~/.agents/skills/showwork*` | `~/.codex/AGENTS.md` | `~/.agents/showwork-backups/` |
 | Claude Code | `~/.claude/skills/showwork*` | `~/.claude/CLAUDE.md` | `~/.claude/showwork-backups/` |
 
-Codex 지침은 `CODEX_HOME`이 설정되면 그 위치를 사용하고, 내용이 있는 `AGENTS.override.md`가 있으면 그 파일을 갱신합니다. Claude는 `CLAUDE_CONFIG_DIR`이 설정되면 그 위치에 스킬과 지침을 설치합니다. 사용자 지침의 스킬 참조는 절대 경로입니다. Showwork 관리 블록 밖의 기존 지침과 다른 스킬은 보존합니다. Claude의 `settings.json`, 인증, MCP, 기존 훅 설정은 수정하지 않습니다.
+Codex uses `CODEX_HOME` when set and updates a nonempty `AGENTS.override.md` when present. Claude installs skills and instructions under `CLAUDE_CONFIG_DIR` when set. Skill references in user instructions use absolute paths. Existing instructions outside the Showwork managed block and other skills are preserved. Claude's `settings.json`, credentials, MCP configuration, and existing hooks are not changed.
 
-Claude 사용자 설치는 개인 스킬과 `CLAUDE.md` 지침을 사용합니다. 별도 플러그인 실행 인자나 요청 훅 등록이 필요하지 않습니다. 네이티브 플러그인 목록에 등록되는 설치는 아닙니다. 관리 정책이 사용자 지침/스킬을 비활성화한 환경에서는 해당 정책이 우선합니다. [Claude 스킬 위치](https://code.claude.com/docs/en/skills#choose-where-skills-load) · [Claude 사용자 지침](https://code.claude.com/docs/en/memory) · [Codex 스킬 위치](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [Codex 지침 우선순위](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+Claude user installation uses personal skills and `CLAUDE.md` instructions. It needs no plugin launch argument or prompt hook registration and does not appear in the native plugin list. Managed policies that disable user instructions or skills take precedence. [Claude skill locations](https://code.claude.com/docs/en/skills#choose-where-skills-load) · [Claude user instructions](https://code.claude.com/docs/en/memory) · [Codex skill locations](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) · [Codex instruction precedence](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 
-## 한 도구 또는 한 프로젝트만 설치
+## Install for one tool or one project
 
 ```bash
 npx --yes github:cwsbrian/showwork --runtime claude
@@ -30,73 +30,73 @@ npx --yes github:cwsbrian/showwork --target /absolute/path/to/your-project
 npx --yes github:cwsbrian/showwork --help
 ```
 
-`--runtime`은 `both`(기본), `codex`, `claude` 중 선택합니다. `--target`이 있으면 그 프로젝트에만 설치합니다. `--user`를 명시해도 기본 사용자 설치와 같으며 `--target`과 함께 쓸 수 없습니다.
+Choose `both` (default), `codex`, or `claude` with `--runtime`. With `--target`, installation is limited to that project. Explicit `--user` is equivalent to the default user installation and cannot be combined with `--target`.
 
-| 프로젝트 설치 | 스킬 | 지침 |
+| Project installation | Skills | Instructions |
 | --- | --- | --- |
-| Codex | `<project>/.agents/skills/showwork*` | `<project>/AGENTS.md` (활성 override 우선) |
+| Codex | `<project>/.agents/skills/showwork*` | `<project>/AGENTS.md` (active override takes precedence) |
 | Claude Code | `<project>/.claude/skills/showwork*` | `<project>/.claude/CLAUDE.md` |
 
-기존 프로젝트 루트 `CLAUDE.md`는 그대로 보존합니다. 대상 프로젝트는 이미 존재해야 합니다. 기본 사용자 설치는 현재 작업 폴더에 파일이나 npm 의존성을 추가하지 않습니다.
+An existing root `CLAUDE.md` is preserved. The target project must already exist. Default user installation adds no files or npm dependencies to the current working directory.
 
-저장소를 직접 내려받아 Python만으로 실행할 수도 있습니다. 파일 이름은 이전 버전과의 호환성을 위해 유지합니다.
+You can clone the repository and use only Python. The installer filename remains for compatibility with older versions.
 
 ```bash
 git clone https://github.com/cwsbrian/showwork.git
 python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 ```
 
-Python 진입점도 기본은 두 도구이며 `--runtime`/`--target`을 지원합니다. 이 경우 업데이트 전에 원본 저장소를 먼저 갱신하세요. 설치기는 실행 중인 번들의 내용을 설치합니다.
+The Python entry point also defaults to both tools and supports `--runtime` and `--target`. Update the source repository before running it to update an installation; it installs the contents of the bundle being run.
 
-## 업데이트와 복구
+## Updates and recovery
 
-동일한 npx 명령을 다시 실행하면 됩니다. 0.2.x의 Codex 전용 설치도 갱신하면서 Claude 사용자 설치를 추가합니다. 최신 커밋 확인에는 네트워크가 필요합니다. `--offline` 또는 특정 커밋에 고정한 주소는 최신 확인용이 아닙니다. npm 10에서 같은 캐시·같은 명령으로 새 Git 커밋을 가져오는 동작을 검증했습니다.
+Rerun the same npx command. An update of a Codex-only 0.2.x installation also adds the Claude user installation. Checking the latest commit requires network access. `--offline` and URLs pinned to a commit do not check for the latest version. Updating to a new Git commit with the same command and cache was verified on npm 10.
 
-- 달라진 스킬 디렉터리는 각 도구의 `showwork-backups/update-*/`에 이전 내용 전체를 보관하고 새 버전으로 교체합니다. 정확한 백업 위치를 출력합니다.
-- 직접 수정하거나 추가한 파일도 백업에 남습니다. 활성 스킬에는 배포판이 적용되므로 계속 필요한 사용자 수정은 백업과 비교해 다시 반영하세요. 배포판에서 제거된 파일은 활성 스킬에서도 제거됩니다.
-- 지침은 관리 블록만 갱신하며 변경 전 파일도 백업합니다. 같은 내용이면 재복사하거나 백업을 추가하지 않습니다.
-- 두 도구 모두 먼저 경로·지침·소스·기존 잠금을 검사합니다. 실제 교체와 오류 복원은 도구별로 수행합니다. 두 번째 도구에서 예기치 않은 쓰기 실패가 나면 첫 번째 도구의 성공한 업데이트는 유지됩니다. 실패 원인을 해결하고 같은 명령을 다시 실행하세요.
-- 스킬 교체나 지침 쓰기가 실패하면 해당 도구의 이전 파일을 복원합니다. 운영체제 강제 종료·전원 장애까지 자동 복원을 보장하지는 않습니다. 중단됐다면 백업을 확인하고, 실행 중인 설치가 없는데 잠금 오류가 남을 때만 해당 도구의 `.showwork-install.lock` 디렉터리를 제거한 뒤 재실행하세요.
+- For changed skill directories, the installer saves all previous contents under each tool's `showwork-backups/update-*/`, then replaces them with the new version. It prints the exact backup location.
+- Modified or added personal files also remain in the backup. The active skill gets the distributed version, so reapply any needed personal edits by comparing with the backup. Files removed from the distribution also leave the active skill.
+- Only the managed instruction block is updated, and the previous instruction file is backed up. Identical content is not recopied or backed up again.
+- Paths, instructions, sources, and existing locks are checked for both tools before changes begin. Replacement and rollback happen separately for each tool. If the second tool has an unexpected write failure, the first tool's completed update remains. Fix the cause and rerun the same command.
+- If skill replacement or instruction writing fails, previous files for that tool are restored. Automatic recovery from forced OS shutdown or power loss is not guaranteed. After an interruption, inspect the backup. Remove that tool's `.showwork-install.lock` directory only when no installer is running, then retry.
 
-백업은 스킬 검색 경로 밖에 보관하며 자동 삭제하지 않습니다. 복구하려면 설치가 실행 중이지 않은지 확인하고 해당 백업의 스킬 디렉터리를 원래 `skills/` 위치로 복원하세요. 이후 설치 명령을 다시 실행하면 다시 최신 배포판이 적용됩니다.
+Backups are stored outside skill discovery paths and are never deleted automatically. To recover, ensure the installer is not running and restore the skill directory from the relevant backup to its original `skills/` location. Running the install command again then reapplies the latest distribution.
 
-0.2.1까지의 기본 설치는 프로젝트 단위였습니다. 이전 프로젝트 파일이나 수동 플러그인 등록은 자동 삭제하지 않습니다. 사용자 설치로 통일하려면 기존 프로젝트의 Showwork 스킬 디렉터리와 지침의 관리 블록을 백업한 뒤 정리하세요. 같은 스킬의 사용자 설치와 플러그인 중복 활성화는 피하세요.
+Until 0.2.1, the default installation was per project. The installer does not remove old project files or manually registered plugins automatically. To use only a user installation, back up and remove the old project's Showwork skill directories and managed instruction block. Avoid activating both the user skill and plugin copy of the same skill.
 
-## 사용과 확인
+## Usage and checks
 
-새 세션에서 평소처럼 작업한 뒤, 결과를 보고 싶을 때 명령을 입력합니다.
+In a new session, work as usual and invoke a command when you want to see the result.
 
 ```text
 # Codex
-$showwork 방금 작업한 결과를 보여줘
+$showwork Show me the work you just finished
 
-# Claude 사용자 설치
-/showwork 방금 작업한 결과를 보여줘
+# Claude user installation
+/showwork Show me the work you just finished
 ```
 
-일반 작업 요청에는 Showwork가 켜지지 않습니다. 결과 설명은 무엇이 바뀌었고 지금 어떻게 동작하는지, 확인한 내용과 남은 문제에 집중합니다. 명령에 구현을 따로 요청하지 않았다면 제품 코드를 바꾸지 않습니다. `showwork-plan`, `showwork-review`, `showwork-verify`, `showwork-adverial-review`도 같은 접두사로 직접 호출합니다.
+Ordinary requests do not activate Showwork. A result walkthrough focuses on what changed, how it works now, checks, and remaining issues. Unless the command separately asks for implementation, it does not change product code. Invoke `showwork-plan`, `showwork-review`, `showwork-verify`, and `showwork-adverial-review` directly with the same prefix.
 
-Codex는 각 스킬의 `agents/openai.yaml`에서 `allow_implicit_invocation: false`를, Claude는 `SKILL.md`에서 `disable-model-invocation: true`를 사용합니다. 업데이트하면 기존 자동 안내 블록을 명령 전용 안내로 교체합니다. 과거 설치를 찾아 바꾸기 위해 `showwork:automatic` 표시 이름은 유지하며, 이 이름이 자동 실행을 뜻하지는 않습니다. 플러그인의 `UserPromptSubmit` 훅은 제거했습니다. [Claude 호출 제한](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill)
+Codex sets `allow_implicit_invocation: false` in each skill's `agents/openai.yaml`; Claude sets `disable-model-invocation: true` in `SKILL.md`. Updates replace older automatic instruction blocks with command-only guidance. The marker name `showwork:automatic` remains so old installations can be found; it does not mean automatic invocation. The plugin's `UserPromptSubmit` hook was removed. [Claude invocation controls](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill)
 
-이미 열린 세션에는 이전 지침이 남을 수 있으므로 반드시 새 세션을 여세요. 이전 프로젝트 설치는 해당 프로젝트에서 `--target`으로 갱신하거나 관리 블록을 정리해야 합니다. 그 밖에 사용자가 직접 만든 자동 실행 규칙이나 관리 정책은 설치기가 바꾸지 않습니다.
+Previously opened sessions may retain old instructions, so open a new session after updating. Update old project installations with `--target` from that project or clean up their managed blocks. The installer does not change other automatic rules written by users or managed policies.
 
-`adverial-review`는 리뷰 결과를 localhost 브라우저에서 보여주고, 모바일 대상에서는 시뮬레이터/에뮬레이터 실행 및 실제 화면 캡처를 요구합니다. npx 사용자 설치에서는 Claude `/showwork-adverial-review`, Codex `$showwork-adverial-review`로 호출합니다. 아래 플러그인 로딩 방식에서만 콜론 명령 `/showwork:adverial-review`를 사용합니다.
+`adverial-review` shows findings in a localhost browser and requires simulator/emulator operation and real screen captures for mobile targets. With npx user installation, invoke Claude `/showwork-adverial-review` or Codex `$showwork-adverial-review`. The colon command `/showwork:adverial-review` is only for the plugin loading method below.
 
-## Claude 로컬 플러그인 방식 (선택)
+## Claude local plugin method (optional)
 
-npx 사용자 설치를 사용한다면 필요하지 않습니다. 저장소를 플러그인으로 직접 불러오려면:
+You do not need this if you use npx user installation. To load the repository directly as a plugin:
 
 ```bash
 claude --plugin-dir /absolute/path/to/showwork
 ```
 
-이 방식은 세션에 플러그인을 로드합니다. 일반 요청에 자동 지침을 전달하는 훅은 없습니다. `/showwork:run`, `/showwork:plan`, `/showwork:review`, `/showwork:verify`, `/showwork:adverial-review` 단축 명령을 사용합니다. [Claude 플러그인](https://code.claude.com/docs/en/plugins)
+This loads the plugin into the session. No hook sends automatic guidance on ordinary requests. Use `/showwork:run`, `/showwork:plan`, `/showwork:review`, `/showwork:verify`, and `/showwork:adverial-review`. [Claude plugins](https://code.claude.com/docs/en/plugins)
 
-## 제거와 검증
+## Removal and verification
 
-선택한 설치 범위에서 Showwork 스킬 디렉터리와 지침 파일의 `showwork:automatic:start`~`showwork:automatic:end` 관리 블록만 제거하세요. 다른 지침이 있는 파일 전체를 삭제하지 마세요. 선택 기능인 증거 기록 도구는 복사하지 않으며, 브라우저 companion은 `showwork` 스킬에 포함됩니다.
+In the chosen installation scope, remove only the Showwork skill directories and the `showwork:automatic:start` to `showwork:automatic:end` managed block in the instruction file. Do not delete a whole file that contains other instructions. The optional evidence recorder is not copied; the browser companion is part of the `showwork` skill.
 
-개발 검사는 저장소에서 실행합니다.
+Run development checks from the repository:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -104,4 +104,4 @@ npm test
 claude plugin validate . --strict
 ```
 
-실제 브라우저 검사는 Playwright와 Chromium이 있는 개발 환경에서 `tests/browser_companion.cjs`를 실행합니다. 자세한 검증 범위와 한계는 [검증 기록](validation.md)을 참고하세요.
+Run `tests/browser_companion.cjs` in a development environment with Playwright and Chromium for a real browser check. See the [validation record](validation.md) for the scope and limits.

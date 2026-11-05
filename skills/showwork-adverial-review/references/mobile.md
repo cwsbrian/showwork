@@ -2,6 +2,8 @@
 
 Use the project's existing build and UI automation workflow. Prefer available simulator/emulator MCP tools and installed project test runners; discover them before claiming the runtime is unavailable. Do not install a new device-control framework for a screenshot. The snippets below are command shapes: resolve actual device IDs, artifact paths and app IDs from the project and local tool help.
 
+When Maestro is already available, prefer a project flow or a short flow on the selected simulator/emulator to navigate the reviewed state and run `takeScreenshot`. Record the flow, device, and resulting image path. Use the device commands below or another existing tool if Maestro cannot reach the scenario. A successful screenshot still requires inspection of the image and observed interaction steps.
+
 ## Select and run the reviewed build
 
 Record the review revision and local diff, platform, device ID/model/OS, build command/artifact and app identifier. Use an existing suitable simulator/emulator or boot one already configured. Select a specific device to avoid targeting another app's session; do not wipe data, uninstall unrelated apps, reset all devices or stop devices you did not start.
