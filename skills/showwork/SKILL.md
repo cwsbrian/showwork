@@ -39,4 +39,6 @@ Give a short chat summary and the full browser URL. If the browser/server cannot
 
 Use [showwork-plan](../showwork-plan/SKILL.md) for planning only, [showwork-review](../showwork-review/SKILL.md) for review only, [showwork-verify](../showwork-verify/SKILL.md) for verification only, and [showwork-adverial-review](../showwork-adverial-review/SKILL.md) for an adversarial review with a visual report and real mobile simulator captures where applicable. Honor each command's scope; these are not mandatory extra stages.
 
+For explicit Obsidian memory commands, use [showwork-set-location](../showwork-set-location/SKILL.md) to set the vault and project document folders and [showwork-save](../showwork-save/SKILL.md) to save agreed decisions and current architecture. Ordinary Showwork walkthroughs do not write to the vault.
+
 For an explicitly requested implementation where a real visual choice is needed, use the companion's decision mode. Otherwise proceed with established choices and focus Showwork on the finished result.

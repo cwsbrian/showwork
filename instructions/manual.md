@@ -12,6 +12,8 @@ For an invoked command, read the matching skill under `{{SKILLS_ROOT}}`:
 - Review: `{{SKILLS_ROOT}}/showwork-review/SKILL.md`.
 - Verification: `{{SKILLS_ROOT}}/showwork-verify/SKILL.md`.
 - Adversarial review: `{{SKILLS_ROOT}}/showwork-adverial-review/SKILL.md`.
+- Obsidian location: `{{SKILLS_ROOT}}/showwork-set-location/SKILL.md`.
+- Obsidian decision save: `{{SKILLS_ROOT}}/showwork-save/SKILL.md`.
 
 Focus the result walkthrough on what changed, how it works now, which changed files
 are worth reviewing and why, what was actually checked, and remaining problems.

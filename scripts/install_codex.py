@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 
-SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review")
+SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review", "showwork-set-location", "showwork-save")
 SOURCE = Path(__file__).resolve().parents[1] / "skills"
 TEMPLATE = SOURCE.parent / "instructions" / "manual.md"
 # Keep legacy markers so updates replace old automatic instructions in place.

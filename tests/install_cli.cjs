@@ -25,9 +25,9 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.ok(packed.files.every(({ path }) => !/(__pycache__|\.pyc$|\.showwork\/|node_modules\/)/.test(path)));
     const args = ['exec', '--yes', '--offline', '--package', join(temporary, packed.filename), '--', 'showwork'];
     writeFileSync(join(project, 'AGENTS.md'), 'Keep my instructions.\n');
-    assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 5/);
+    assert.match(ok(run('npm', [...args, '--target', project])), /installed\/updated 7/);
     for (const skillRoot of ['.agents/skills', '.claude/skills']) {
-      for (const name of ['showwork','showwork-plan','showwork-review','showwork-verify','showwork-adverial-review']) {
+      for (const name of ['showwork','showwork-plan','showwork-review','showwork-verify','showwork-adverial-review','showwork-set-location','showwork-save']) {
         const skill = join(project, skillRoot, name);
         const frontmatter = readFileSync(join(skill, 'SKILL.md'), 'utf8').split('---')[1];
         assert.match(frontmatter, /^disable-model-invocation: true$/m);
@@ -111,7 +111,7 @@ test('the same npx command and cache pick up a new Git commit and update install
     commit();
     const args = ['--yes', '--cache', join(temporary, 'npm-cache'),
       `git+${pathToFileURL(repository).href}#main`, '--target', project];
-    assert.match(run('npx', args, project), /installed\/updated 5/);
+    assert.match(run('npx', args, project), /installed\/updated 7/);
     const installed = join(project, '.agents/skills/showwork');
     assert.equal(readFileSync(join(installed, 'SKILL.md'), 'utf8'), 'First release');
     assert.ok(existsSync(join(installed, 'references/retired.md')));

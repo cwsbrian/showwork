@@ -48,6 +48,8 @@ It avoids a long work diary or approval at every step. Put supporting technical 
 | Review changes | `$showwork-review` | `/showwork-review` | `/showwork:review` |
 | Verify behavior | `$showwork-verify` | `/showwork-verify` | `/showwork:verify` |
 | Adversarial review with visual report | `$showwork-adverial-review` | `/showwork-adverial-review` | `/showwork:adverial-review` |
+| Set Obsidian vault and project folders | `$showwork-set-location` | `/showwork-set-location` | `/showwork:set-location` |
+| Save agreed decisions and current architecture | `$showwork-save` | `/showwork-save` | `/showwork:save` |
 
 Each command runs only when invoked directly. Ordinary requests and discussion about Showwork are not invocations. Activation for one task does not carry over to a different task.
 
