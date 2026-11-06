@@ -72,7 +72,11 @@ def project_identity(project):
     common = run_git(project, "rev-parse", "--path-format=absolute", "--git-common-dir")
     common_dir = os.path.realpath(common or project)
     folder = Path(common_dir)
-    name = folder.parent.name if common and folder.name == ".git" else folder.name
+    name = folder.name
+    if common and folder.name.startswith("."):
+        name = folder.parent.name  # ".git", or a bare-repo layout such as "Repo/.bare"
+    elif common and folder.name.endswith(".git") and len(folder.name) > 4:
+        name = folder.name[:-4]  # bare clone "repo.git"
     return {
         "id": hashlib.sha256(common_dir.encode()).hexdigest()[:16],
         "name": name,

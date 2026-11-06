@@ -42,6 +42,15 @@ class StoreTests(unittest.TestCase):
         git("commit", "--allow-empty", "-m", "i", cwd=repo)
         return repo
 
+    def test_bare_repo_layouts_are_named_after_the_repository(self):
+        for layout, expected in (("Frendy-App/.bare", "Frendy-App"), ("plain.git", "plain")):
+            bare = self.tmp / layout
+            bare.mkdir(parents=True)
+            git("init", "--bare", cwd=bare)
+            wt = self.tmp / ("wt-" + expected)
+            git("worktree", "add", "--orphan", "-b", "main-" + expected, str(wt), cwd=bare)
+            self.assertEqual(STORE.project_identity(wt)["name"], expected)
+
     def test_worktrees_share_one_project(self):
         repo = self.repo()
         wt = self.tmp / "wt"
