@@ -1,6 +1,6 @@
 ---
 name: showwork-adverial-review
-description: Perform an explicitly requested adversarial review and show findings with evidence in a localhost browser. Use for Showwork adverial-review or adversarial-review requests; for mobile apps, run the reviewed build in a simulator/emulator and attach actual screenshots. Review only unless fixes are authorized.
+description: Perform an explicitly requested adversarial review and show findings with evidence in the Showwork app, with a local browser fallback. Use for Showwork adverial-review or adversarial-review requests; for mobile apps, run the reviewed build in a simulator/emulator and attach actual screenshots. Review only unless fixes are authorized.
 disable-model-invocation: true
 ---
 
@@ -30,9 +30,9 @@ Identify the target from repository manifests and build/run documentation, not j
 
 Use project-provided test accounts/data. A review does not authorize real purchases, production writes or deletion of unrelated simulator/user data. Starting an available local simulator and running an authorized test build needs no extra approval. Continue source review and other safe checks when one runtime step is blocked.
 
-## Publish the review on localhost
+## Publish the review
 
-Read the shared [browser companion guide](../showwork/references/companion.md). Reuse `../showwork/scripts/companion.py`, resolved from this skill directory. Run `companion.py path --project /absolute/project` first and write handoff JSON, captures and one-off scripts inside that returned temporary directory, never in the project; start `serve --project /absolute/project` in a persistent tool session, then `publish --project /absolute/project --file /absolute/report.json`. Use `mode: "handoff"`, never decision mode. Open the full returned localhost URL and include it in the final response. If the server/browser is unavailable, retain the artifacts and report the precise limitation.
+Read the shared [browser companion guide](../showwork/references/companion.md). Reuse `../showwork/scripts/companion.py`, resolved from this skill directory. Run `companion.py path --project /absolute/project` first and write handoff JSON, captures and one-off scripts inside that returned temporary directory, never in the project; then `publish --project /absolute/project --file /absolute/report.json --type adversarial-review --agent <claude|codex>`. Use `mode: "handoff"`, never decision mode. If the publish output says `"app": "opened"`, the report is in the Showwork app; otherwise start `serve --project /absolute/project` in a persistent tool session, open the full returned localhost URL and include it in the final response. If the app and server/browser are unavailable, retain the artifacts and report the precise limitation.
 
 Build the page around the findings, not a generic feature tour:
 
@@ -41,4 +41,4 @@ Build the page around the findings, not a generic feature tour:
 3. **Runtime captures:** for mobile, attach screenshots from the simulator/emulator as `kind: "observed"` sections with `image` paths, device/OS, app/build identity, scenario/actions, capture time and what the image actually shows. Connect them to finding IDs or the exercised acceptance criterion. Keep hypothetical fixes/mockups separate and labeled `proposal` or `explanation`.
 4. **Evidence and gaps:** list concrete checks, outcomes and remaining work. In `checks`, use `failed` for an observed mismatch, `verified` for behavior actually demonstrated, and `unverified` for unrun/inconclusive runtime criteria. Severity is separate from check status. Include mobile launch/interaction/capture gaps even when source review found no defects.
 
-Inspect the rendered report, including attached images, before claiming it was shown. An image path or server exit code does not prove a capture rendered. Give a brief chat summary of findings, the browser URL and important limits. Keep fixes as recommendations unless separately authorized.
+Inspect the rendered report, including attached images, before claiming it was shown. An image path or server exit code does not prove a capture rendered. Give a brief chat summary of findings, where the report is (the app or the browser URL) and important limits. Keep fixes as recommendations unless separately authorized.

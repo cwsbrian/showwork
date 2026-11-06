@@ -4,3 +4,7 @@ __pycache__/
 .DS_Store
 node_modules/
 *.tgz
+app/node_modules/
+app/dist/
+app/src-tauri/target/
+app/src-tauri/gen/

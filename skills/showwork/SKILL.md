@@ -21,7 +21,7 @@ Explain in the user's language with short sentences and familiar words a third-g
 
 ## Show the outcome
 
-Read the [browser companion guide](references/companion.md) and publish a handoff page. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
+Read the [browser companion guide](references/companion.md) and publish a handoff page with `companion.py publish --project /absolute/project --file <json> --type result --agent <claude|codex>`. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
 
 - **UI:** show actual resulting screens and important interactions when tools permit, with capture provenance. Label explanatory mockups separately.
 - **Routing:** show a connected flow/sequence diagram with actual branches, conditions and responses. Put route tables and source traces below it.
@@ -31,9 +31,9 @@ Read the [browser companion guide](references/companion.md) and publish a handof
 
 Cover every materially changed area without long visible paragraphs. Follow the guide's model delegation and evidence ownership rules. The primary agent checks facts and the rendered page before sharing it; a generated report alone is not a viewed result.
 
-Keep reports, captures and one-off scripts in the temporary directory returned by `companion.py path --project ...`, never in the project. If the optional [evidence helper](../../scripts/showwork.py) is present, it also stores records in temporary storage; read its help before use. No helper is required to judge the evidence.
+Reports are stored in the Showwork app folder, never in the project. Keep captures and one-off scripts in the temporary directory returned by `companion.py path --project ...`, never in the project. If the optional [evidence helper](../../scripts/showwork.py) is present, it also stores records in temporary storage; read its help before use. No helper is required to judge the evidence.
 
-Give a short chat summary and the full browser URL. If the browser/server cannot run, share the saved artifact and the precise limitation. Do not claim completion while a required behavior remains unproved or failing.
+Give a short chat summary. If the publish output says `"app": "opened"`, say the report is in the Showwork app; otherwise start `serve` and give the full browser URL. If neither can run, share the saved artifact and the precise limitation. Do not claim completion while a required behavior remains unproved or failing.
 
 ## Other explicit commands
 

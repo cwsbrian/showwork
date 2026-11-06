@@ -2,6 +2,7 @@
   "name": "showwork",
   "version": "0.5.0",
   "private": true,
+  "license": "MIT",
   "description": "Install command-only Showwork result walkthroughs for Codex and Claude Code.",
   "repository": "github:cwsbrian/showwork",
   "bin": { "showwork": "scripts/cli.cjs" },
@@ -14,7 +15,9 @@
     "skills/*/agents/*.yaml",
     "skills/*/references/*.md",
     "skills/*/scripts/*.py",
-    "skills/*/assets/*.html"
+    "skills/*/assets/*.html",
+    "skills/*/assets/*.js",
+    "skills/*/assets/*.css"
   ],
   "scripts": { "test": "node --test tests/install_cli.cjs" }
 }

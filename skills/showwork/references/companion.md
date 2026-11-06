@@ -33,23 +33,28 @@ The primary agent checks the returned facts against the packet, validates the JS
 
 Model selection references: [Codex subagent configuration](https://learn.chatgpt.com/docs/config-file/config-reference) and [Claude subagent model selection](https://code.claude.com/docs/en/sub-agents#choose-a-model). Runtime capabilities take precedence over example identifiers.
 
-## Start the browser
+## Show the report
 
-First get the temporary artifact directory (the command creates it outside the project):
+Publish first (see **Publish a page**). The app is the default viewer; the browser is the fallback.
+
+- If the publish output says `"app": "opened"`, tell the user the report is in the Showwork app. The app is the user's viewer; do not share a browser URL. You may still run `serve` yourself to check the rendered page and images before sharing (see below), then stop it.
+- If it says `"missing"` or `"disabled"`, start the browser fallback below and share the full URL.
+
+First get the temporary directory for captures and one-off scripts (the command creates it outside the project):
 
 ```bash
 SHOWWORK_VISUAL=$(python3 /absolute/path/to/showwork/scripts/companion.py path --project /absolute/project)
 ```
 
-Use this returned absolute path for report JSON, screenshots and disposable scripts. On POSIX it is `/tmp/showwork-<uid>/<project-path-hash>/visual`; on Windows it uses the OS temporary folder. Each user gets a private directory and each resolved project path gets a separate folder. Never create `.showwork/` or report artifacts in the project.
+Use this returned absolute path for report JSON sources, screenshots and disposable scripts. On POSIX it is `/tmp/showwork-<uid>/<project-path-hash>/visual`; on Windows it uses the OS temporary folder. Never create `.showwork/` or report artifacts in the project.
 
-Run through the environment's persistent shell/session mechanism:
+Browser fallback, run through the environment's persistent shell/session mechanism:
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/companion.py serve --project /absolute/project
 ```
 
-Here `showwork` means the **skill folder**, e.g. `<project>/.agents/skills/showwork`, not the plugin root. The server stays in the foreground; keep the tool session alive rather than detaching a process the host may reap. It prints JSON containing `url`, `pid`, `project`, and `directory`; connection info also lives at `server.json` inside the returned temporary directory. Check that the server responds before reusing old info. Restarting gives a new URL/key. Stop the owning terminal process with Ctrl-C when the walkthrough is no longer needed.
+Here `showwork` means the **skill folder**, e.g. `<project>/.agents/skills/showwork`, not the plugin root. The server stays in the foreground; keep the tool session alive rather than detaching a process the host may reap. It prints JSON containing `url`, `pid`, `project`, and `directory`; connection info also lives at `server.json` inside the returned temporary directory. It shows the latest report from the same worktree and updates live. Check that the server responds before reusing old info. Restarting gives a new URL/key. Stop the owning terminal process with Ctrl-C when the walkthrough is no longer needed.
 
 Open the full `url` using an available browser-opening tool such as `open_in_codex`, and include that clickable URL in chat. In a local desktop environment, `serve --open` can open the system browser instead. Do not require another permission question to show a visual already needed for the authorized task. This server binds only to `127.0.0.1`; a remote user's browser may need the environment's existing port forwarding. Do not pretend a local URL is reachable from another machine.
 
@@ -59,10 +64,11 @@ Author a JSON file, then run:
 
 ```bash
 python3 /absolute/skill/showwork/scripts/companion.py publish \
-  --project /absolute/project --file "$SHOWWORK_VISUAL/handoff-source.json"
+  --project /absolute/project --file "$SHOWWORK_VISUAL/handoff-source.json" \
+  --type result --agent claude
 ```
 
-The open browser updates automatically. Every publish creates a new version. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
+Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the command's `--type`: `result` (showwork), `plan`, `review`, `verify` or `adversarial-review`. A decision page uses the type of the command that raised it, for example `--type plan` while planning. It prints JSON with `published` (version), `mode`, `report` (the report id), `project`, `path` and `app` (`opened`, `missing` or `disabled`). Keep the `report` id for `events`. The app or an open browser updates automatically. Every publish creates a new report. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
 
 ### Decision page
 
@@ -79,17 +85,19 @@ The open browser updates automatically. Every publish creates a new version. Kee
 }
 ```
 
-Use the user's language and faithfully represent each alternative. These are mockups, not proof of running behavior. The browser lets the user choose an option and submit it. Read current-version selections with:
+Use the user's language and faithfully represent each alternative. These are mockups, not proof of running behavior. The user chooses an option and submits it in the Showwork app, or in the browser fallback. Read current-version selections with:
 
 ```bash
-python3 /absolute/skill/showwork/scripts/companion.py events --project /absolute/project
+python3 /absolute/skill/showwork/scripts/companion.py events --project /absolute/project --report <report id from publish>
 ```
+
+It prints `{"report": id, "version", "open": bool, "events": [...]}`; when no report matches, `report` and `version` are `null` and `open` is `false`. Always pass `--report`; without it the latest decision report from the same worktree is used, and never another worktree's. The worktree is the git top-level folder (the project folder outside git), so a subfolder of the same checkout counts as the same worktree. A decision stays open until a newer report is published from the same worktree; it stays closed even if that newer report is later deleted.
 
 Do not busy-poll. Wait for the user to reply, or use a supported bounded wait while continuing independent work, then read the events. A saved click does not itself wake an idle agent; tell the user to continue in chat if necessary. Combine the latest submitted selection with the user's chat feedback; an explicit correction in chat takes precedence. Old versions' selections cannot decide new alternatives. The choice applies only to the displayed question, not permission to deploy or expand scope.
 
 ### Handoff page
 
-Use `mode: "handoff"`, `title`, `summary`, `sections`, `checks`, and optionally `files` (see **Files worth reviewing** below). It has no options or approval control.
+Use `mode: "handoff"`, `title`, `summary`, `sections`, `checks` (optional for `plan` and `review` reports), and optionally `files` (see **Files worth reviewing** below). It has no options or approval control.
 
 Each section requires `title`, `body`, one visual (`html` or `image`), and `kind`:
 - `observed`: an actual captured result, with provenance and what it demonstrates.
@@ -100,7 +108,7 @@ Use inline SVG/HTML for diagrams, or `image` for an existing PNG/JPEG/WebP/GIF p
 
 Image sections keep a compact preview and an accessible original-image link that opens a new tab. Use browser-native image zoom to read tall captures; verify the original loads through the companion's authenticated asset route. Decision option images remain selection targets.
 
-Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), and `evidence` (the observed command/result/artifact location, or the precise limitation). Preserve failures and missing evidence. These labels are authored by the agent; the companion does not validate product correctness.
+Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), and `evidence` (the observed command/result/artifact location, or the precise limitation). Preserve failures and missing evidence. These labels are authored by the agent; the companion does not validate product correctness. Plan and review reports may omit `checks`, because nothing has been run yet; other types still require them. A plan's proposed checks go in a section, never as `verified` checks. An unrun check is not proof.
 
 ### Explain the changed system, not just the finished screen
 
@@ -145,4 +153,4 @@ If only a label changed, explain that label change briefly; do not invent databa
 
 ## Limits
 
-The page and events stay in temporary storage, outside the project. They may disappear when the OS cleans `/tmp` or after a restart; regenerate missing reports. Stop the server before removing its reported directory when finished. Do not remove other projects' temporary folders. Existing project `.showwork/` folders are not automatically migrated or deleted; inspect and move them to temporary storage if requested. The full session URL carries a private key. Browser choices do not run code or edit product files. There is no telemetry, external API, or image-generation service. If the local browser cannot be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.
+Reports persist in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS; `SHOWWORK_STORE` overrides it for tests or advanced use only: the app does not read it, so with it set publish reports `"app": "disabled"` and the browser fallback is used; elsewhere `$XDG_DATA_HOME/showwork` or `~/.local/share/showwork`) until the user deletes them from the app. They are never put in the project, and the real code shown in a report is stored there too. Captures and one-off scripts still go in the temporary folder from `companion.py path`; it may disappear when the OS cleans `/tmp` or after a restart. Existing project `.showwork/` folders are not automatically migrated or deleted. The full session URL of the browser fallback carries a private key. Choices in the app or browser do not run code or edit product files. There is no telemetry, external API, or image-generation service. If neither the app nor the local browser can be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.

@@ -80,7 +80,21 @@ Codex sets `allow_implicit_invocation: false` in each skill's `agents/openai.yam
 
 Previously opened sessions may retain old instructions, so open a new session after updating. Update old project installations with `--target` from that project or clean up their managed blocks. The installer does not change other automatic rules written by users or managed policies.
 
-`adverial-review` shows findings in a localhost browser and requires simulator/emulator operation and real screen captures for mobile targets. With npx user installation, invoke Claude `/showwork-adverial-review` or Codex `$showwork-adverial-review`. The colon command `/showwork:adverial-review` is only for the plugin loading method below.
+`adverial-review` shows findings in the Showwork app (or the browser fallback) and requires simulator/emulator operation and real screen captures for mobile targets. With npx user installation, invoke Claude `/showwork-adverial-review` or Codex `$showwork-adverial-review`. The colon command `/showwork:adverial-review` is only for the plugin loading method below.
+
+## App (macOS)
+
+The Showwork app is the default place to read reports. It is optional: without it, `companion.py serve` shows the latest report in the browser. Reports are saved in `~/Library/Application Support/Showwork` (on other systems `$XDG_DATA_HOME/showwork` or `~/.local/share/showwork`), never in your project. Delete them from the app. `SHOWWORK_STORE` points the skills at a different folder for tests or advanced use; the app does not read it, so publishing with it set skips the app and uses the browser fallback.
+
+Build it from the repository (needs Node.js and the Rust toolchain):
+
+```bash
+cd app
+npm install && npm run tauri build
+cp -R src-tauri/target/release/bundle/macos/Showwork.app /Applications/
+```
+
+The app is unsigned. A copy you built yourself opens directly. If macOS blocks a downloaded copy, open System Settings › Privacy & Security and click Open Anyway. If several Showwork.app copies exist (for example in build folders), macOS may launch the wrong one: install it to /Applications and remove or unregister the build copies (`lsregister -u <path>`). After a report is published, the skills start the app in the background with no window; click its notification or dock icon to read the report. Set `SHOWWORK_NO_APP=1` to stop the skills from starting it.
 
 ## Claude local plugin method (optional)
 

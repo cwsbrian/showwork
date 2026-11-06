@@ -11,7 +11,7 @@ import mimetypes
 import os
 from pathlib import Path
 import secrets
-import shutil
+import subprocess
 import sys
 import tempfile
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -20,8 +20,11 @@ import webbrowser
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from runtime import workspace
+import store
 
-TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "companion.html"
+ASSETS = Path(__file__).resolve().parents[1] / "assets"
+TEMPLATE = ASSETS / "companion.html"
+REPORT_TYPES = ["plan", "review", "verify", "result", "adversarial-review"]
 MAX_BODY = 2 * 1024 * 1024
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_FILE = 512 * 1024  # one file read for "Files worth reviewing"
@@ -62,7 +65,9 @@ def attach_code(project, files):
             path = (root / item["path"]).resolve()
             if not path.is_relative_to(root) or not path.is_file():
                 raise ValueError(f"File to review not found in the project: {item['path']}")
-            if ".git" in path.relative_to(root).parts or path.name.startswith(".env"):
+            # Compare case-insensitively: .GIT/config and .ENV are the same files on macOS.
+            if (any(part.casefold() == ".git" for part in path.relative_to(root).parts)
+                    or path.name.casefold().startswith(".env")):
                 raise ValueError(f"Refusing to show a git or environment file: {item['path']}")
             if path.stat().st_size > MAX_FILE:
                 raise ValueError(f"{item['path']} is too large; pass lines or a code excerpt")
@@ -85,7 +90,7 @@ def attach_code(project, files):
         raise ValueError("Files to review hold too much code; show the changed parts with lines or a diff")
 
 
-def validate(page):
+def validate(page, report_type="result"):
     if not isinstance(page, dict) or page.get("mode") not in {"decision", "handoff"}:
         raise ValueError("mode must be decision or handoff")
     require_text(page.get("title"), "title")
@@ -101,8 +106,11 @@ def validate(page):
             raise ValueError("A decision needs at least two visual options")
     elif options:
         raise ValueError("A handoff explains the result; it must not request option selection")
-    if page["mode"] == "handoff" and (not sections or not checks):
-        raise ValueError("A handoff needs visual sections and verification results")
+    if page["mode"] == "handoff":
+        if not sections:
+            raise ValueError("A handoff needs visual sections")
+        if not checks and report_type not in ("plan", "review"):
+            raise ValueError("A handoff needs verification results")
     for item in sections + options:
         if not isinstance(item, dict):
             raise ValueError("Each section/option must be an object")
@@ -152,14 +160,37 @@ def validate(page):
     return page
 
 
-def publish(project, source):
+def open_app():
+    """Ask the desktop app to refresh in the background; never raises."""
+    if os.environ.get("SHOWWORK_NO_APP") == "1" or sys.platform != "darwin":
+        return "disabled"
+    if os.environ.get("SHOWWORK_STORE"):
+        return "disabled"  # the app reads only the default store, so a custom store needs the browser
+    try:
+        check = subprocess.run(["osascript", "-e", 'application id "dev.showwork.app" is running'],
+                               capture_output=True, text=True, timeout=10)
+        if check.returncode == 0 and check.stdout.strip() == "true":
+            return "opened"  # the running app's file watcher picks up the report; do not raise its window
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        result = subprocess.run(["open", "-g", "-a", "Showwork", "--args", "--background"],
+                                capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return "missing"
+    return "opened" if result.returncode == 0 else "missing"
+
+
+def publish(project, source, report_type=None, agent=None):
+    report_type = report_type or "result"
+    if report_type not in REPORT_TYPES:
+        raise ValueError(f"type must be one of {', '.join(REPORT_TYPES)}")
     source = Path(source).resolve()
     if source.stat().st_size > MAX_BODY:
         raise ValueError("Page JSON must be at most 2 MiB; use image files for screenshots")
-    page = validate(json.loads(source.read_text(encoding="utf-8")))
-    root = directory(project)
-    # Validate all attachments before changing the current page.
-    copies = []
+    page = validate(json.loads(source.read_text(encoding="utf-8")), report_type)
+    # Validate all attachments before saving anything.
+    images = []
     for item in page.get("sections", []) + page.get("options", []):
         if "image" not in item:
             continue
@@ -168,20 +199,24 @@ def publish(project, source):
             raise ValueError(f"Expected a PNG/JPEG/WebP/GIF image: {image}")
         with image.open("rb") as stream:
             name = hashlib.file_digest(stream, "sha256").hexdigest() + image.suffix.lower()
-        copies.append((image, root / "assets" / name))
-        item["image"] = "/assets/" + name
+        images.append((image, "assets/" + name))
+        item["image"] = "assets/" + name
     attach_code(project, page.get("files", []))
-    for image, destination in copies:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(image, destination)
     page["version"] = secrets.token_hex(12)
     page["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    save_json(root / "page.json", page)
-    return page
+    meta = store.save_report(project, page, images, report_type, store.detect_agent(agent))
+    return {**page, "report": meta}
+
+
+def worktree_reports(project):
+    worktree = store.worktree_key(project)
+    return [meta for meta in store.list_reports(store.project_identity(project)["id"])
+            if meta.get("worktree") == worktree]
 
 
 class CompanionServer(HTTPServer):
     def __init__(self, project, port=0):
+        self.project = Path(project).resolve()
         self.root = directory(project)
         self.root.mkdir(parents=True, exist_ok=True)
         self.token = secrets.token_urlsafe(32)
@@ -239,11 +274,21 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 self.respond(200, TEMPLATE.read_bytes(), "text/html; charset=utf-8")
             elif path == "/api/view":
-                page_path = self.server.root / "page.json"
-                page = json.loads(page_path.read_text(encoding="utf-8")) if page_path.exists() else None
-                self.respond(200, {"page": page})
+                meta = store.latest_report(self.server.project)
+                page = json.loads((store.report_dir(meta) / "page.json").read_text(encoding="utf-8")) if meta else None
+                self.respond(200, {"page": page, "report": meta["id"] if meta else None})
+            elif path in ("/report-view.js", "/report-view.css"):
+                asset = ASSETS / path[1:]
+                if asset.is_file():
+                    self.respond(200, asset.read_bytes(), mimetypes.guess_type(asset.name)[0] or "application/octet-stream")
+                else:
+                    self.respond(404, {"error": "Not found"})
             elif path.startswith("/assets/"):
-                assets = (self.server.root / "assets").resolve()
+                meta = store.latest_report(self.server.project)
+                if not meta:
+                    self.respond(404, {"error": "Image not found"})
+                    return
+                assets = (store.report_dir(meta) / "assets").resolve()
                 asset = (assets / path.removeprefix("/assets/")).resolve()
                 if not asset.is_relative_to(assets) or asset.suffix.lower() not in IMAGE_TYPES or not asset.is_file():
                     self.respond(404, {"error": "Image not found"})
@@ -266,20 +311,21 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < size <= 16384:
                 raise ValueError("Invalid event size")
             data = json.loads(self.rfile.read(size))
-            page = json.loads((self.server.root / "page.json").read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("Expected a choice object")
-            if data.get("version") != page["version"]:
+            meta = next((item for item in worktree_reports(self.server.project) if item.get("version") == data.get("version")), None)
+            if meta is None:
                 self.respond(409, {"error": "This page changed. Review the latest options."})
                 return
-            if page["mode"] != "decision" or data.get("choice") not in [item["id"] for item in page["options"]]:
+            if meta["mode"] != "decision":
                 raise ValueError("Not a current visual choice")
-            event = {
-                "version": page["version"], "title": page["title"],
-                "choice": data["choice"], "time": datetime.now(timezone.utc).isoformat(),
-            }
-            with (self.server.root / "events.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+            if not store.is_open(meta):
+                self.respond(409, {"error": "This question is closed. Review the latest report."})
+                return
+            page = json.loads((store.report_dir(meta) / "page.json").read_text(encoding="utf-8"))
+            if data.get("choice") not in [item["id"] for item in page["options"]]:
+                raise ValueError("Not a current visual choice")
+            store.append_event(meta, data["choice"])
             self.respond(200, {"recorded": True, "choice": data["choice"]})
         except (OSError, ValueError, KeyError, TypeError):
             self.respond(400, {"error": "Invalid choice"})
@@ -296,6 +342,10 @@ def main():
             command.add_argument("--open", action="store_true")
         if name == "publish":
             command.add_argument("--file", required=True, type=Path)
+            command.add_argument("--type", choices=REPORT_TYPES)
+            command.add_argument("--agent", choices=["claude", "codex"])
+        if name == "events":
+            command.add_argument("--report")
     args = cli.parse_args()
     try:
         if not args.project.is_dir():
@@ -305,14 +355,20 @@ def main():
             root.mkdir(exist_ok=True)
             print(root)
         elif args.action == "publish":
-            page = publish(args.project, args.file)
-            print(json.dumps({"published": page["version"], "mode": page["mode"]}))
+            page = publish(args.project, args.file, args.type, args.agent)
+            meta = page["report"]
+            print(json.dumps({"published": page["version"], "mode": page["mode"], "report": meta["id"],
+                              "project": meta["project_id"], "path": str(store.report_dir(meta)), "app": open_app()}))
         elif args.action == "events":
-            root = directory(args.project)
-            current = json.loads((root / "page.json").read_text(encoding="utf-8"))
-            path = root / "events.jsonl"
-            events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
-            print(json.dumps({"version": current["version"], "events": [item for item in events if item["version"] == current["version"]]}, ensure_ascii=False))
+            if args.report:
+                meta = next((item for item in worktree_reports(args.project) if item["id"] == args.report), None)
+            else:
+                meta = store.latest_report(args.project, "decision")
+            if meta is None:
+                print(json.dumps({"report": None, "version": None, "open": False, "events": []}))
+            else:
+                current = [item for item in store.read_events(meta) if item.get("version") == meta["version"]]
+                print(json.dumps({"report": meta["id"], "version": meta["version"], "open": store.is_open(meta), "events": current}, ensure_ascii=False))
         else:
             with CompanionServer(args.project, args.port) as server:
                 info = {"url": server.url, "pid": os.getpid(), "project": str(args.project.resolve()), "directory": str(server.root)}

@@ -28,7 +28,7 @@ Use a representation that helps a human judge the result:
 
 Do not produce decorative artifacts. Use available tools; a missing preview tool calls for an honest, clearly labeled substitute, not a fabricated rendered result.
 
-If a visual choice needs the user's input, use the [browser companion](../showwork/references/companion.md) in decision mode with rendered alternatives. A text-only sketch is not sufficient for that interaction. Do not invent a UI confirmation step when the choice is routine or already settled. Keep the prototype separate from product code; planning-only scope still applies.
+If a visual choice needs the user's input, publish a decision page with the [companion](../showwork/references/companion.md) (`--type plan`, `mode: "decision"`) with rendered alternatives; the user chooses in the Showwork app, or in the browser fallback. A text-only sketch is not sufficient for that interaction. Do not invent a UI confirmation step when the choice is routine or already settled. Keep the prototype separate from product code; planning-only scope still applies.
 
 ## Resolve only decisions that matter
 
@@ -46,4 +46,4 @@ Include only details useful for implementation or review:
 4. The credible failure modes that deserve challenge and the checks that would expose them.
 5. How each important criterion will be demonstrated, including runtime evidence for behavior and rendered evidence for UI. Note environment requirements that have actually been established.
 
-Keep proposed checks separate from performed checks. Do not present an unrun command, prototype, or future screenshot as proof. End with the plan and any unresolved decision, without claiming the feature is implemented or moving into a build automatically.
+Keep proposed checks separate from performed checks. Do not present an unrun command, prototype, or future screenshot as proof. End by publishing a plan report with the [companion](../showwork/references/companion.md): `companion.py publish --project /absolute/project --file <json> --type plan --agent <claude|codex>`. Its parts are the outcome and acceptance criteria, the proposed behavior or visual, the decisions and assumptions, the steps, the risks, and how each criterion will be demonstrated. `checks` may be omitted; put proposed checks in a section, never as `verified`. Keep a short summary in chat with the unresolved decisions and where the report is (the Showwork app if the publish output says `"app": "opened"`, otherwise the `serve` URL). Do not claim the feature is implemented or move into a build automatically.

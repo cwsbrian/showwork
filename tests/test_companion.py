@@ -38,6 +38,11 @@ class CompanionTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="showwork companion ")
         self.project = Path(self.temp.name)
+        self.store_dir = tempfile.TemporaryDirectory(prefix="showwork store ")
+        self.addCleanup(self.store_dir.cleanup)
+        env = patch.dict(os.environ, {"SHOWWORK_STORE": self.store_dir.name, "SHOWWORK_NO_APP": "1"})
+        env.start()
+        self.addCleanup(env.stop)
         self.server = COMPANION.CompanionServer(self.project)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -100,7 +105,7 @@ class CompanionTest(unittest.TestCase):
     def test_page_and_cookie_bootstrap(self):
         expected = self.publish(DECISION)
         with self.get("/api/view") as response:
-            self.assertEqual(json.load(response)["page"], expected)
+            self.assertEqual(json.load(response)["page"], {k: v for k, v in expected.items() if k != "report"})
         with self.get("/") as response:
             self.assertIn(b"Showwork", response.read())
             self.assertEqual(response.headers["Cache-Control"], "no-store")
@@ -137,7 +142,7 @@ class CompanionTest(unittest.TestCase):
         page = self.publish(DECISION)
         with self.post({"version": page["version"], "choice": "board"}) as response:
             self.assertTrue(json.load(response)["recorded"])
-        event = json.loads((self.server.root / "events.jsonl").read_text())
+        event = json.loads((COMPANION.store.report_dir(page["report"]) / "events.jsonl").read_text())
         self.assertEqual(event["version"], page["version"])
         self.assertEqual(event["choice"], "board")
 
@@ -147,7 +152,7 @@ class CompanionTest(unittest.TestCase):
         with self.assertRaises(HTTPError) as failure:
             self.post({"version": old["version"], "choice": "board"})
         self.assertEqual(failure.exception.code, 409)
-        self.assertFalse((self.server.root / "events.jsonl").exists())
+        self.assertFalse((COMPANION.store.report_dir(old["report"]) / "events.jsonl").exists())
 
     def test_cross_origin_choice_is_rejected(self):
         page = self.publish(DECISION)
@@ -165,7 +170,7 @@ class CompanionTest(unittest.TestCase):
         page = self.publish(DECISION)
         with self.assertRaises(HTTPError):
             self.post({"version": page["version"], "choice": "not-an-option"})
-        self.assertFalse((self.server.root / "events.jsonl").exists())
+        self.assertFalse((COMPANION.store.report_dir(page["report"]) / "events.jsonl").exists())
 
     def test_attachment_is_copied_and_unrelated_files_are_not_served(self):
         image = self.project / "screen.png"
@@ -175,7 +180,7 @@ class CompanionTest(unittest.TestCase):
         page["sections"][0]["image"] = "screen.png"
         published = self.publish(page)
         image.write_bytes(b"changed")
-        with self.get(published["sections"][0]["image"]) as response:
+        with self.get("/" + published["sections"][0]["image"]) as response:
             self.assertEqual(response.read(), b"captured-image")
         for path in ["/assets/../page.json", "/assets/%2e%2e/page.json", "/page-source.json"]:
             with self.subTest(path=path), self.assertRaises(HTTPError) as failure:
@@ -219,9 +224,14 @@ class CompanionTest(unittest.TestCase):
     def test_files_to_review_stay_inside_the_project(self):
         outside = Path(self.temp.name).parent / "outside-showwork-test.txt"
         (self.project / ".env").write_text("SECRET=1")
+        (self.project / ".ENV").write_text("SECRET=1")
+        (self.project / ".Env.local").write_text("SECRET=1")
+        (self.project / ".GIT").mkdir()
+        (self.project / ".GIT" / "config").write_text("url = https://user:SECRET@example.com/r.git")
         (self.project / "blob.bin").write_bytes(b"\xff\xfe\x00")
         first = self.publish(HANDOFF)
         cases = {"outside": {"path": "../" + outside.name}, "missing": {"path": "nope.py"}, "env": {"path": ".env"},
+                 "env upper": {"path": ".ENV"}, "env mixed": {"path": ".Env.local"}, "git upper": {"path": ".GIT/config"},
                  "binary": {"path": "blob.bin"}, "both": {"path": "x.py", "code": "x", "lines": [1, 1]},
                  "bad lines": {"path": "x.py", "lines": [3, 1]}, "no why": {"path": "x.py", "code": "x", "why": ""}}
         outside.write_text("private")
@@ -247,7 +257,130 @@ class CompanionTest(unittest.TestCase):
         result = subprocess.run([sys.executable, str(SCRIPT), "events", "--project", str(self.project)],
                                 capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"version": current["version"], "events": []})
+        out = json.loads(result.stdout)
+        self.assertEqual(out["report"], current["report"]["id"])
+        self.assertEqual((out["version"], out["open"], out["events"]), (current["version"], True, []))
+
+    def cli(self, *args, project=None):
+        env = {**os.environ}
+        return subprocess.run([sys.executable, str(SCRIPT), *args, "--project", str(project or self.project)],
+                              capture_output=True, text=True, timeout=10, env=env)
+
+    def test_each_publish_creates_a_new_report(self):
+        a, b = self.publish(DECISION), self.publish(DECISION)
+        self.assertNotEqual(a["report"]["id"], b["report"]["id"])
+        self.assertEqual(len(COMPANION.store.list_reports(a["report"]["project_id"])), 2)
+
+    def test_plan_and_review_may_omit_checks(self):
+        page = copy.deepcopy(HANDOFF)
+        page.pop("checks")
+        source = self.project / "nochecks.json"
+        source.write_text(json.dumps(page))
+        for kind in ["plan", "review"]:
+            COMPANION.publish(self.project, source, report_type=kind)
+        with self.assertRaises(ValueError):
+            COMPANION.publish(self.project, source, report_type="result")
+
+    def test_type_and_agent_recorded(self):
+        source = self.project / "d.json"
+        source.write_text(json.dumps(DECISION))
+        meta = COMPANION.publish(self.project, source, report_type="verify", agent="codex")["report"]
+        self.assertEqual((meta["type"], meta["agent"]), ("verify", "codex"))
+        self.assertEqual(COMPANION.publish(self.project, source)["report"]["type"], "result")
+
+    def test_events_scoped_to_worktree(self):
+        with tempfile.TemporaryDirectory(prefix="showwork repo ") as repo:
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+            wt = Path(repo).parent / (Path(repo).name + "-wt")
+            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", "other", str(wt)], check=True)
+            self.addCleanup(shutil.rmtree, wt, True)
+            source = Path(self.project) / "scope.json"
+            source.write_text(json.dumps(DECISION))
+            page = COMPANION.publish(repo, source)
+            server = COMPANION.CompanionServer(repo)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                opener = build_opener(HTTPCookieProcessor(CookieJar()))
+                opener.open(server.url, timeout=3).close()
+                request = Request(server.origin + "/api/choice", data=json.dumps({"version": page["version"], "choice": "list"}).encode(),
+                                  headers={"Content-Type": "application/json", "Origin": server.origin})
+                opener.open(request, timeout=3).close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=3)
+                shutil.rmtree(server.root.parent)
+            self.assertEqual(json.loads(self.cli("events", project=repo).stdout)["events"][0]["choice"], "list")
+            self.assertEqual(json.loads(self.cli("events", project=wt).stdout),
+                             {"report": None, "version": None, "open": False, "events": []})
+
+    def test_subfolder_shares_the_repository_worktree(self):
+        with tempfile.TemporaryDirectory(prefix="showwork repo ") as repo:
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            sub = Path(repo) / "sub"
+            sub.mkdir()
+            source = Path(self.project) / "sub.json"
+            source.write_text(json.dumps(DECISION))
+            decision = COMPANION.publish(repo, source)["report"]
+            out = json.loads(self.cli("events", "--report", decision["id"], project=sub).stdout)
+            self.assertEqual((out["report"], out["open"]), (decision["id"], True))
+            source.write_text(json.dumps(HANDOFF))
+            COMPANION.publish(sub, source)
+            out = json.loads(self.cli("events", "--report", decision["id"], project=repo).stdout)
+            self.assertEqual((out["report"], out["open"]), (decision["id"], False))
+
+    def test_closed_decision_rejects_choice(self):
+        decision = self.publish(DECISION)
+        self.publish(HANDOFF)
+        with self.assertRaises(HTTPError) as failure:
+            self.post({"version": decision["version"], "choice": "list"})
+        self.assertEqual(failure.exception.code, 409)
+        self.assertFalse((COMPANION.store.report_dir(decision["report"]) / "events.jsonl").exists())
+
+    def run_open_app(self, running, store=None):
+        calls = []
+
+        def fake(command, **kwargs):
+            calls.append(command)
+            out = ("true" if running else "false") + "\n" if command[0] == "osascript" else ""
+            return subprocess.CompletedProcess(command, 0, out, "")
+
+        with patch.dict(os.environ), patch.object(sys, "platform", "darwin"), patch.object(COMPANION.subprocess, "run", fake):
+            os.environ.pop("SHOWWORK_NO_APP", None)
+            os.environ.pop("SHOWWORK_STORE", None)
+            if store:
+                os.environ["SHOWWORK_STORE"] = store
+            return COMPANION.open_app(), calls
+
+    def test_open_app_disabled_for_custom_store(self):
+        status, calls = self.run_open_app(True, store=self.store_dir.name)
+        self.assertEqual(status, "disabled")
+        self.assertEqual(calls, [])
+
+    def test_open_app_does_not_reopen_running_app(self):
+        status, calls = self.run_open_app(True)
+        self.assertEqual(status, "opened")
+        self.assertNotIn("open", [c[0] for c in calls])
+
+    def test_open_app_launches_in_background_when_not_running(self):
+        status, calls = self.run_open_app(False)
+        self.assertEqual(status, "opened")
+        self.assertIn(["open", "-g", "-a", "Showwork", "--args", "--background"], calls)
+
+    def test_publish_never_writes_project(self):
+        self.publish(DECISION)
+        self.assertEqual(sorted(p.name for p in self.project.iterdir()), ["page-source.json"])
+
+    def test_publish_without_app_reports_disabled(self):
+        source = self.project / "cli.json"
+        source.write_text(json.dumps(DECISION))
+        result = self.cli("publish", "--file", str(source), "--type", "plan", "--agent", "claude")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = json.loads(result.stdout)
+        self.assertEqual((out["app"], out["mode"]), ("disabled", "decision"))
+        self.assertTrue(Path(out["path"], "page.json").is_file())
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ test('packed CLI installs from npx cache and preserves project changes', () => {
     assert.ok(existsSync(join(project, '.claude/skills/showwork/assets/companion.html')));
     const instructions = readFileSync(join(project, 'AGENTS.md'), 'utf8');
     assert.ok(instructions.startsWith('Keep my instructions.\n'));
-    for (const file of ['scripts/companion.py', 'assets/companion.html', 'references/companion.md']) {
+    for (const file of ['scripts/companion.py', 'assets/companion.html', 'assets/report-view.js', 'assets/report-view.css', 'references/companion.md']) {
       assert.ok(existsSync(join(project, '.agents/skills/showwork', file)), file);
     }
     assert.match(ok(run('npm', [...args, 'install', '--target', project], { cwd: temporary })), /installed\/updated 0/);

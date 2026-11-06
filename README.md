@@ -38,6 +38,8 @@ The explanation focuses on:
 - Which changed files are worth reviewing and why each matters
 - What was actually checked and what remains unresolved
 
+Reports open in the optional macOS Showwork app (see [App (macOS)](docs/installation.md#app-macos)); without it, a localhost browser page is used.
+
 It avoids a long work diary or approval at every step. Put supporting technical detail under “Show details.”
 
 ## Other commands
@@ -88,7 +90,7 @@ The command retains the requested spelling `adverial-review`. Invoke it accordin
 | npx user installation · Codex | `$showwork-adverial-review Review my current changes` |
 | Claude plugin | `/showwork:adverial-review Review my current changes` |
 
-The review reads the changed scope and actual call paths, then examines code-specific counterexamples involving permissions, boundaries, duplicate actions, and partial failures. It presents severity, source location, reproduction conditions, expected and actual behavior, and evidence in a localhost report. Fixes are applied only when separately requested.
+The review reads the changed scope and actual call paths, then examines code-specific counterexamples involving permissions, boundaries, duplicate actions, and partial failures. It presents severity, source location, reproduction conditions, expected and actual behavior, and evidence in a Showwork report (the app, or the browser fallback). Fixes are applied only when separately requested.
 
 For mobile apps, launch the target iOS Simulator or Android Emulator, then **install the review build → launch the app → interact with relevant screens → attach real screenshots**. Record the device, OS, build, interactions, and capture source. If the simulator, SDK, build setup, or control tool is unavailable, mark those steps unverified and continue the code review where possible. A mobile web viewport or mockup does not replace a native app capture.
 
@@ -104,7 +106,7 @@ Keep the explanation short and simple enough for a third-grade reader, while spe
 
 By default, delegate only report writing to a Codex Luna or Claude Haiku subagent. The main model operates the app or simulator, captures screens, judges review findings, and inspects the final page. If model selection is unavailable, the main model writes the report and discloses the fallback. An explicit preference such as Terra or Sonnet takes precedence; do not change global model settings. This is an agent instruction, not server-enforced model routing. Open a tall capture at full size in a new tab through **Open original image**.
 
-Store reports, captures, and check records in **`/tmp`**, not the project. Each project gets a separate temporary folder. The OS may clean these files. Windows uses its own temporary directory.
+Reports are kept in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS), never in the project, until you delete them from the app. Captures and check records go in a per-project temporary folder under **`/tmp`**, which the OS may clean; Windows uses its own temporary directory.
 
 The browser tool lives inside the `showwork` skill and is copied with both user and project installations. It uses only the Python standard library and updates the page automatically. See the [browser guide](skills/showwork/references/companion.md) for usage and page format. Browser choices are recorded, but they do not automatically wake a waiting agent; continue in chat when needed.
 

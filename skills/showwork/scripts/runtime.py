@@ -11,6 +11,14 @@ def temporary_root():
     return Path('/tmp' if os.name == 'posix' else tempfile.gettempdir()).resolve()
 
 
+def ensure_private_dir(path):
+    path = Path(path)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or (os.name == 'posix' and
+            (info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077)):
+        raise ValueError(f'Unsafe temporary directory: {path}')
+
+
 def workspace(project):
     project = Path(project).expanduser().resolve()
     identity = str(os.getuid()) if hasattr(os, 'getuid') else hashlib.sha256(str(Path.home()).encode()).hexdigest()
@@ -20,8 +28,5 @@ def workspace(project):
         raise ValueError('Temporary Showwork storage must be outside the project')
     for directory in (root, target):
         directory.mkdir(mode=0o700, exist_ok=True)
-        info = directory.lstat()
-        if not stat.S_ISDIR(info.st_mode) or (os.name == 'posix' and
-                (info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077)):
-            raise ValueError(f'Unsafe temporary directory: {directory}')
+        ensure_private_dir(directory)
     return target
