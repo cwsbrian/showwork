@@ -25,6 +25,8 @@ Start by running `companion.py start --project /absolute/project --type result -
 
 Read the [browser companion guide](references/companion.md) and publish a handoff page with `companion.py publish --project /absolute/project --file <json> --type result --agent <claude|codex>`. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
 
+For each important file, use file-level `why` for its role and select the source lines that explain behavior. Prefer 1–4 named `snippets`, each with a `title`, `lines: [first, last]` covering 1–20 real source lines, and its own concrete `why`. For example, one file can show "Choose the original pool" at `[40, 47]` (why: returns the chat to the right queue) and "Record the refund" at `[72, 81]` (why: makes the pool choice traceable). See the guide for the JSON example and supported legacy single-code/range and diff reports.
+
 - **UI:** show actual resulting screens and important interactions when tools permit, with capture provenance. Label explanatory mockups separately.
   For web captures, use the [in-app browser](references/companion.md#capture-web-pages-in-the-app).
 - **Routing:** show a connected flow/sequence diagram with actual branches, conditions and responses. Put route tables and source traces below it.

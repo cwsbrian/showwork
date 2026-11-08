@@ -139,15 +139,18 @@ Add a **Files worth reviewing** list to a result walkthrough when files changed.
 
 ```json
 "files": [
-  {"path": "src/billing/refund.ts", "why": "Refunds now return the chat to the pool it came from.", "lines": [40, 88]},
-  {"path": "app/Services/ChatLedger.php", "why": "Every refund is written to the ledger.", "diff": true, "code": "@@ -12,6 +12,9 @@ ...\n-old line\n+new line\n context"}
+  {"path": "src/billing/refund.ts", "why": "Routes refunds and records where the returned chat belongs.", "snippets": [
+    {"title": "Choose the original pool", "lines": [40, 47], "why": "Uses the saved pool so refunds return the chat to the right queue."},
+    {"title": "Record the refund", "lines": [72, 81], "why": "Writes the pool choice to the ledger so the refund can be traced."}
+  ]}
 ]
 ```
 
-- `path` (project-relative) and `why` (one short sentence: what changed there and why it matters) are required.
-- Without `code`, publishing reads the current file from the project, optionally only `lines: [first, last]`. This is the default because it shows the actual code. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
-- For what changed, pass `diff: true` with `code` set to the unified diff for that file (for example `git diff -U3 -- <path>`); added and removed lines are colored and numbered from the hunk headers.
-- `code` with `start_line` shows a pasted excerpt with correct line numbers. `language` overrides the extension-based coloring.
+- `path` (project-relative) and file-level `why` (the file's role) are required. Select actual source lines that explain behavior, rather than a broad region containing several unrelated changes.
+- Prefer `snippets`: 1–4 named excerpts per file. Each needs nonempty `title`, `lines: [first, last]` covering 1–20 real source lines, and its own concrete `why` explaining why that excerpt matters. Publishing reads current source and embeds `code` and `start_line`; do not supply those yourself or mix snippets with top-level `code`, `lines`, `start_line` or `diff`.
+- Legacy single-code reports remain supported: without `code`, publishing reads the full current file or one `lines: [first, last]` range. Pasted `code` with `start_line` preserves line numbers; `language` overrides extension-based coloring.
+- Legacy diffs remain supported: pass `diff: true` with `code` set to the unified diff for that file (for example `git diff -U3 -- <path>`); added and removed lines are colored and numbered from the hunk headers.
+- Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused. The 1.5 MiB embedded-code and 2 MiB JSON-source limits still apply.
 - Show the changed region rather than a whole large file. Never include credentials or private payloads in code.
 
 | Changed area | What the browser should explain |

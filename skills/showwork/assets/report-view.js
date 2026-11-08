@@ -58,8 +58,8 @@
       if(last<code.length) out.push(['',code.slice(last)]);
       return out;
     }
-    function codeRows(file){
-      const family=familyOf(file),raw=file.code.replace(/\r\n?/g,'\n').replace(/\n$/,''),rows=[];
+    function codeRows(file,preserveRows=false){
+      const family=familyOf(file),raw=file.code.replace(/\r\n?/g,'\n').replace(preserveRows?/$^/:/\n$/,''),rows=[];
       if(!file.diff){
         let parts=[];rows.push({kind:'',parts});
         for(const [cls,value] of tokens(raw,family)) value.split('\n').forEach((piece,i)=>{if(i){parts=[];rows.push({kind:'',parts});}if(piece)parts.push([cls,piece]);});
@@ -85,7 +85,7 @@
       rows.forEach(row=>row.no=row.mark===undefined?' '.repeat(width*2+1):String(row.old).padStart(width)+' '+String(row.new).padStart(width));
       return rows;
     }
-    function editor(file){
+    function editor(file,preserveRows=false){
       const box=document.createElement('div');box.className='editor';
       const bar=document.createElement('div');bar.className='editor-bar';
       const dots=text('span','','dots');dots.setAttribute('aria-hidden','true');dots.append(document.createElement('i'),document.createElement('i'),document.createElement('i'));
@@ -95,7 +95,7 @@
       bar.append(dots,text('span',file.path,'name'),text('span',label,'lang'),copy);
       const view=document.createElement('div');view.className='code';view.tabIndex=0;view.setAttribute('role','region');view.setAttribute('aria-label','Code: '+file.path);
       const fragment=document.createDocumentFragment();
-      for(const row of codeRows(file)){
+      for(const row of codeRows(file,preserveRows)){
         const line=document.createElement('div');line.className=('line '+row.kind).trim();line.append(text('span',row.no,'no'));
         const source=document.createElement('span');source.className='src';
         if(row.mark!==undefined) source.append(text('span',row.mark,'mark'));
@@ -197,12 +197,27 @@ export function renderReport(root, page, hooks) {
       $('files').hidden=!files.length;$('file-list').replaceChildren();$('toggle-files').textContent='Expand all';
       files.forEach((file,index)=>{
         const item=document.createElement('details');item.className='file';item.id=p+'file-'+index;
-        const summary=document.createElement('summary');const count=file.code.replace(/\n$/,'').split('\n').length;
+        const summary=document.createElement('summary');const count=file.snippets?0:file.code.replace(/\n$/,'').split('\n').length;
         const chevron=text('span','▶','chev');chevron.setAttribute('aria-hidden','true');
-        const where=file.diff?'Changes':file.start_line?'Lines '+file.start_line+'–'+(file.start_line+count-1):count+' lines';
+        const where=file.snippets?file.snippets.length+' excerpts':file.diff?'Changes':file.start_line?'Lines '+file.start_line+'–'+(file.start_line+count-1):count+' lines';
         summary.append(chevron,text('span',file.path,'file-path'),text('span',where,'file-meta'),text('span',file.why,'file-why'));
         item.append(summary);
-        item.addEventListener('toggle',()=>{if(item.open&&!item.querySelector('.editor'))item.append(editor(file));syncToggle();});
+        item.addEventListener('toggle',()=>{
+          if(item.open&&!item.querySelector('.editor')){
+            if(file.snippets){
+              const list=document.createElement('div');list.className='snippet-list';
+              for(const snippet of file.snippets){
+                const card=document.createElement('section');card.className='snippet-card';
+                const count=snippet.code.split('\n').length;
+                card.append(text('h3',snippet.title+' · Lines '+snippet.start_line+'–'+(snippet.start_line+count-1),'snippet-title'),
+                  editor({code:snippet.code,start_line:snippet.start_line,path:file.path,language:file.language},true),text('p',snippet.why,'snippet-why'));
+                list.append(card);
+              }
+              item.append(list);
+            }else item.append(editor(file));
+          }
+          syncToggle();
+        });
         $('file-list').append(item);
       });
       if(files.length){const link=text('a','Files worth reviewing');link.href='#'+p+'files';$('contents').append(link);}

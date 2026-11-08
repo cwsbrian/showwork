@@ -221,6 +221,65 @@ class CompanionTest(unittest.TestCase):
         self.assertEqual(files[1]["code"], "one\ntwo\nthree\nfour\n")
         self.assertEqual(files[2]["code"], "@@ -1 +1 @@\n-a\n+b")
 
+    def test_files_to_review_read_multiple_snippets_from_one_file(self):
+        (self.project / "src").mkdir()
+        (self.project / "src/store.ts").write_text("one\ntwo\nthree\nfour\n")
+        page = copy.deepcopy(HANDOFF)
+        page["files"] = [{"path": "src/store.ts", "why": "Saves tasks", "snippets": [
+            {"title": "Save", "why": "Writes state", "lines": [2, 2]},
+            {"title": "Load", "why": "Reads state", "lines": [4, 4]},
+        ]}]
+        files = self.publish(page)["files"]
+        self.assertEqual(len(files), 1)
+        self.assertEqual([(s["code"], s["start_line"]) for s in files[0]["snippets"]], [("two", 2), ("four", 4)])
+        self.assertTrue(all("lines" not in s for s in files[0]["snippets"]))
+
+    def test_file_snippets_read_once_and_count_utf8_bytes(self):
+        source = self.project / "source.py"
+        source.write_text("é\nlast\n", encoding="utf-8")
+        files = [{"path": "source.py", "why": "Reason", "snippets": [
+            {"title": "First", "why": "Reason", "lines": [1, 1]},
+            {"title": "Second", "why": "Reason", "lines": [2, 2]},
+        ]}]
+        original_read = Path.read_text
+        reads = []
+
+        def read_text(path, *args, **kwargs):
+            reads.append(path)
+            return original_read(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", read_text), patch.object(COMPANION, "MAX_CODE", 6):
+            COMPANION.attach_code(self.project, copy.deepcopy(files))
+        self.assertEqual(reads, [source.resolve()])
+        with patch.object(COMPANION, "MAX_CODE", 5), self.assertRaises(ValueError):
+            COMPANION.attach_code(self.project, copy.deepcopy(files))
+
+    def test_file_snippets_reject_invalid_shapes(self):
+        (self.project / "source.py").write_text("line\n" * 25)
+        snippet = {"title": "Logic", "why": "Explains behavior", "lines": [1, 1]}
+        cases = {"zero": [], "five": [snippet] * 5, "not list": {}, "not object": ["bad"]}
+        for name, lines in {"zero line": [0, 1], "reversed": [3, 2], "too long": [1, 21],
+                            "past EOF": [25, 26], "boolean": [True, 2]}.items():
+            cases[name] = [{**snippet, "lines": lines}]
+        cases["nested diff"] = [{**snippet, "diff": True}]
+        for key in ["title", "why"]:
+            cases["blank " + key] = [{**snippet, key: " "}]
+        project_id = COMPANION.store.project_identity(self.project)["id"]
+        for name, snippets in cases.items():
+            page = copy.deepcopy(HANDOFF)
+            page["files"] = [{"path": "source.py", "why": "Reason", "snippets": snippets}]
+            before_reports = COMPANION.store.list_reports(project_id)
+            with self.subTest(case=name), self.assertRaises(ValueError):
+                self.publish(page)
+            self.assertEqual(COMPANION.store.list_reports(project_id), before_reports)
+        for key, value in {"code": "x", "lines": [1, 1], "start_line": 1, "diff": False}.items():
+            page = copy.deepcopy(HANDOFF)
+            page["files"] = [{"path": "source.py", "why": "Reason", "snippets": [snippet], key: value}]
+            before_reports = COMPANION.store.list_reports(project_id)
+            with self.subTest(case="mixed " + key), self.assertRaises(ValueError):
+                self.publish(page)
+            self.assertEqual(COMPANION.store.list_reports(project_id), before_reports)
+
     def test_files_to_review_stay_inside_the_project(self):
         outside = Path(self.temp.name).parent / "outside-showwork-test.txt"
         (self.project / ".env").write_text("SECRET=1")
@@ -235,12 +294,19 @@ class CompanionTest(unittest.TestCase):
                  "binary": {"path": "blob.bin"}, "both": {"path": "x.py", "code": "x", "lines": [1, 1]},
                  "bad lines": {"path": "x.py", "lines": [3, 1]}, "no why": {"path": "x.py", "code": "x", "why": ""}}
         outside.write_text("private")
+        (self.project / "outside-link").symlink_to(outside)
+        snippet = [{"title": "Logic", "why": "Reason", "lines": [1, 1]}]
+        for path in ["../" + outside.name, ".GIT/config", ".Env.local", "outside-link"]:
+            cases["snippet " + path] = {"path": path, "snippets": snippet}
+        project_id = COMPANION.store.project_identity(self.project)["id"]
         try:
             for name, extra in cases.items():
                 page = copy.deepcopy(HANDOFF)
                 page["files"] = [{"why": "Reason", **extra}]
+                before_reports = COMPANION.store.list_reports(project_id)
                 with self.subTest(case=name), self.assertRaises(ValueError):
                     self.publish(page)
+                self.assertEqual(COMPANION.store.list_reports(project_id), before_reports)
             decision = copy.deepcopy(DECISION)
             decision["files"] = [{"path": "x.py", "why": "Reason", "code": "x"}]
             with self.assertRaises(ValueError):

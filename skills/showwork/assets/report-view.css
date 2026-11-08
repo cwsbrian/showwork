@@ -23,6 +23,11 @@
     .chev { color:var(--muted); font-size:11px; transition:transform .15s; } .file[open] .chev { transform:rotate(90deg); }
     .file-path { font:600 14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow-wrap:anywhere; } .file-meta { font-size:12px; color:var(--muted); white-space:nowrap; }
     .file-why { grid-column:2 / 4; color:var(--muted); font-size:14px; }
+    .snippet-list { display:grid; gap:16px; padding:0 14px 14px; min-width:0; }
+    .snippet-card { min-width:0; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+    .snippet-title { margin:0; padding:12px; font-size:15px; overflow-wrap:anywhere; }
+    .snippet-why { margin:0; padding:12px; color:var(--muted); font-size:14px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    button.copy:focus-visible { outline:2px solid #65cdb7; outline-offset:2px; }
     .editor { background:#1f2329; color:#d4d8de; border-top:1px solid var(--line); } .editor-bar { display:flex; align-items:center; gap:10px; padding:7px 12px; background:#181b20; color:#9aa3ae; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
     .dots { display:flex; gap:6px; } .dots i { width:10px; height:10px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
     .editor-bar .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .editor-bar .lang { text-transform:uppercase; letter-spacing:.6px; font-size:11px; }

@@ -78,6 +78,17 @@ def attach_code(project, files):
                 code = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
+            if "snippets" in item:
+                rows = code.splitlines()
+                for snippet in item["snippets"]:
+                    first, last = snippet["lines"]
+                    if last > len(rows):
+                        raise ValueError(f"{item['path']} has only {len(rows)} lines")
+                    snippet["code"] = "\n".join(rows[first - 1:last])
+                    snippet["start_line"] = first
+                    del snippet["lines"]
+                    total += len(snippet["code"].encode("utf-8"))
+                continue
             if "lines" in item:
                 first, last = item.pop("lines")
                 rows = code.splitlines()
@@ -136,6 +147,23 @@ def validate(page, report_type="result"):
             raise ValueError("Each file must be an object")
         require_text(item.get("path"), "file path")
         require_text(item.get("why"), "file why")
+        if "snippets" in item:
+            if any(key in item for key in ("code", "lines", "start_line", "diff")):
+                raise ValueError("A file with snippets cannot include code, lines, start_line or diff")
+            snippets = item["snippets"]
+            if not isinstance(snippets, list) or not 1 <= len(snippets) <= 4:
+                raise ValueError("file snippets must contain 1–4 objects")
+            for snippet in snippets:
+                if not isinstance(snippet, dict):
+                    raise ValueError("Each snippet must be an object")
+                if "diff" in snippet:
+                    raise ValueError("A source snippet cannot include diff")
+                require_text(snippet.get("title"), "snippet title")
+                require_text(snippet.get("why"), "snippet why")
+                span = snippet.get("lines")
+                if not (isinstance(span, list) and len(span) == 2 and all(map(line_number, span))
+                        and 1 <= span[1] - span[0] + 1 <= 20):
+                    raise ValueError("snippet lines must cover 1–20 source lines")
         for key in ["code", "language"]:
             if key in item:
                 require_text(item[key], f"file {key}")

@@ -34,6 +34,7 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   const oldVersion=publish(decision);
   browser=await chromium.launch({headless:true,executablePath:process.env.SHOWWORK_CHROMIUM});
   const page=await browser.newPage({viewport:{width:1280,height:960}});
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const requested=[];page.on('request',request=>requested.push(request.url()));
   await page.goto(info.url);await page.getByRole('heading',{name:decision.title}).waitFor();
@@ -104,6 +105,42 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   handoff.sections.push({kind:'explanation',title:'Transition on everything',body:'A transition on a viewport-sized screen must not grow its frame forever.',html:'<style>*{transition:all .3s}</style><div style="min-height:100vh;background:#eef4f1">Phone screen</div>'});
   handoff.sections.push({kind:'explanation',title:'Transitioned hero',body:'A hero whose height transitions must settle too.',html:'<style>.hero{height:100vh;transition:height .2s ease;background:#9cf}</style><div class=hero>Hero</div>'});
   const multi='diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n@@ -1,2 +1,2 @@\n a\n-b\n+c\ndiff --git a/y.py b/y.py\nindex 111..222 100644\n--- a/y.py\n+++ b/y.py\n@@ -10,1 +10,1 @@\n-q\n+r\n';
+  const snippetLines=['const first = "'+ 'x'.repeat(240) +'";', 'return first;', ...Array.from({length:10},(_,i)=>`// gap ${i}`), 'export const second = 42;', 'return second;'];
+  fs.writeFileSync(path.join(temporary,'snippets.ts'),snippetLines.join('\n')+'\n');
+  const excerptHandoff={...handoff,title:'Two excerpts in one file',files:[{path:'snippets.ts',why:'Two important source regions.',snippets:[{title:'First excerpt',why:'First reason',lines:[1,2]},{title:'Second excerpt',why:'<script>bad()</script>',lines:[13,14]}]}]};
+  publish(excerptHandoff);await page.getByRole('heading',{name:excerptHandoff.title}).waitFor();
+  assert.equal(await page.locator('#files details.file').count(),1);
+  assert.equal(await page.locator('#files .editor').count(),0,'Excerpts render lazily');
+  await page.locator('#file-0 summary').focus();await page.keyboard.press('Enter');
+  await page.locator('#file-0 .snippet-card').first().waitFor();
+  assert.equal(await page.locator('#file-0 .snippet-card').count(),2);
+  assert.deepEqual(await page.locator('#file-0 .snippet-title').allTextContents(),['First excerpt · Lines 1–2','Second excerpt · Lines 13–14']);
+  assert.deepEqual(await page.locator('#file-0 .snippet-why').allTextContents(),['First reason','<script>bad()</script>']);
+  assert.equal(await page.evaluate(()=>window.bad),undefined);
+  assert.equal(await page.locator('#file-0 .snippet-why script').count(),0,'Reasons stay plain text');
+  assert.ok((await page.locator('#file-0 summary').textContent()).includes('2 excerpts'));
+  assert.deepEqual(await page.locator('#file-0 .code').evaluateAll(regions=>regions.map(el=>el.querySelector('.no').textContent.trim())),['1','13']);
+  assert.equal(await page.locator('#file-0 button.copy').count(),2);
+  for(const [index,lines] of [[0,snippetLines.slice(0,2)],[1,snippetLines.slice(12,14)]]){
+    const copy=page.locator('#file-0 button.copy').nth(index);await copy.focus();await page.keyboard.press('Enter');
+    await waitFor(async()=>await copy.textContent()==='Copied');
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),lines.join('\n'));
+  }
+  await page.setViewportSize({width:390,height:844});
+  assert.ok(await page.locator('#file-0 .code').first().evaluate(el=>el.scrollWidth>el.clientWidth));
+  for(const selector of ['#file-0','#file-0 .snippet-card'])assert.ok(await page.locator(selector).evaluateAll(items=>items.every(el=>el.getBoundingClientRect().right<=innerWidth)));
+  assert.ok(await page.locator('#file-0 .snippet-card .tk-kw').count()>0,'Excerpts retain syntax highlighting');
+  await page.setViewportSize({width:1280,height:960});
+  fs.writeFileSync(path.join(temporary,'empty-row.ts'),'const a = 1;\n\nnext\n');
+  publish({...handoff,title:'Trailing empty source row',files:[{path:'empty-row.ts',why:'Selected blank row',snippets:[{title:'Blank ending',why:'Includes empty row',lines:[1,2]}]}]});
+  await page.getByText('empty-row.ts',{exact:true}).waitFor();
+  await page.locator('#file-0 summary').click();
+  await page.locator('#file-0 .snippet-card').waitFor();
+  assert.equal(await page.locator('#file-0 .snippet-title').textContent(),'Blank ending · Lines 1–2');
+  assert.deepEqual(await page.locator('#file-0 .no').allTextContents(),['1','2']);
+  await page.locator('#file-0 button.copy').click();
+  await waitFor(async()=>await page.locator('#file-0 button.copy').textContent()==='Copied');
+  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'const a = 1;\n');
   handoff.files=[
     {path:'store.ts',why:'Saving tasks now keeps their order.',lines:[12,14]},
     {path:'api/routes.py',why:'The new route checks the owner before saving.',diff:true,code:'@@ -10,3 +10,4 @@ def save(request):\n     task = load(request)\n-    return store(task)\n+    if task.owner != request.user:  # refuse others\n+        raise Forbidden("not yours")\n     return store(task)\n'},
@@ -213,6 +250,6 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.deepEqual(errors,[]);
   server.kill('SIGINT');await waitFor(()=>server.exitCode!==null);
   await page.getByText('Disconnected · Last page').waitFor();
-  const result={passed:true,checks:['rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','image decision selection without navigation','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded','keyboard original image access with authenticated full-resolution popup','file accordions with code read from the project, line numbers, highlighting and diffs','renderer module served same-origin','late choice ignored after page change','multi-file diff headers','linear highlighting of unclosed quotes','70k-line diff','100vh visual settles','transitioned 100vh visuals settle','no measurement styles left after navigating to a document without a body','growing visual reaches full height','saving status and the saved option named after switching mid-send','saved choice survives a reconnect without a second post','no request leaves 127.0.0.1','no global renderer leak'],screenshots:['decision.png','handoff.png','mobile.png']};
+  const result={passed:true,checks:['grouped excerpts','individual excerpt Copy','plain-text excerpt reasons','narrow excerpt layout','trailing empty excerpt row','rendered alternatives','sandboxed HTML','keyboard selection','persisted choice','image decision selection without navigation','live handoff update','no approval on handoff','stale-choice rejection','mobile width','reload cookie','disconnection indicator','full-width detailed handoff','long table without height cap','expandable details resize','section navigation','actual captured image served and decoded','keyboard original image access with authenticated full-resolution popup','file accordions with code read from the project, line numbers, highlighting and diffs','renderer module served same-origin','late choice ignored after page change','multi-file diff headers','linear highlighting of unclosed quotes','70k-line diff','100vh visual settles','transitioned 100vh visuals settle','no measurement styles left after navigating to a document without a body','growing visual reaches full height','saving status and the saved option named after switching mid-send','saved choice survives a reconnect without a second post','no request leaves 127.0.0.1','no global renderer leak'],screenshots:['decision.png','handoff.png','mobile.png']};
   fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,output},null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server.exitCode===null)server.kill('SIGINT');await waitFor(()=>server.exitCode!==null).catch(()=>server.kill('SIGKILL'));if(runtimeDirectory)fs.rmSync(path.dirname(runtimeDirectory),{recursive:true,force:true});fs.rmSync(temporary,{recursive:true,force:true});fs.rmSync(storeDirectory,{recursive:true,force:true});});
