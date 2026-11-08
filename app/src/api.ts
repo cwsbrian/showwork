@@ -1,8 +1,8 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { ReportMeta } from './model';
+import type { ReportMeta, RunningItem, SessionItem } from './model';
 
-export type { ReportMeta };
+export type { ReportMeta, RunningItem, SessionItem };
 export type View = 'list' | 'flow';
 
 export interface ProjectSummary {
@@ -12,6 +12,7 @@ export interface ProjectSummary {
   remote: string | null;
   lastActivity: string | null;
   unread: number;
+  running: number;
 }
 
 export interface ReportDetail {
@@ -28,6 +29,11 @@ export interface ReportRef {
 export interface ShowworkApi {
   listProjects(): Promise<ProjectSummary[]>;
   listReports(projectId: string): Promise<ReportMeta[]>;
+  listRunning(projectId: string): Promise<RunningItem[]>;
+  listSessions(projectId: string, runId: string): Promise<SessionItem[]>;
+  listAllSessions(projectId: string): Promise<SessionItem[]>;
+  deleteSession(projectId: string, sessionId: string): Promise<void>;
+  deleteRunning(projectId: string, runId: string): Promise<void>;
   getReport(projectId: string, reportId: string): Promise<ReportDetail>;
   submitChoice(projectId: string, reportId: string, version: string, choice: string): Promise<void>;
   markRead(reportId: string): Promise<void>;
@@ -37,6 +43,7 @@ export interface ShowworkApi {
   deleteProject(projectId: string): Promise<void>;
   revealProject(projectId: string): Promise<void>;
   onArrival(cb: (p: ReportRef) => void): void;
+  onRunningChanged(cb: () => void): void;
   onOpenReport(cb: (p: ReportRef) => void): void;
   assetUrl(dir: string, relative: string): string;
 }
@@ -45,6 +52,11 @@ function tauriApi(): ShowworkApi {
   return {
     listProjects: () => invoke('list_projects'),
     listReports: (projectId) => invoke('list_reports', { projectId }),
+    listRunning: (projectId) => invoke('list_running', { projectId }),
+    listSessions: (projectId, runId) => invoke('list_sessions', { projectId, runId }),
+    listAllSessions: (projectId) => invoke('list_all_sessions', { projectId }),
+    deleteSession: (projectId, sessionId) => invoke('delete_session', { projectId, sessionId }),
+    deleteRunning: (projectId, runId) => invoke('delete_running', { projectId, runId }),
     getReport: (projectId, reportId) => invoke('get_report', { projectId, reportId }),
     submitChoice: (projectId, reportId, version, choice) =>
       invoke('submit_choice', { projectId, reportId, version, choice }),
@@ -55,13 +67,16 @@ function tauriApi(): ShowworkApi {
     deleteProject: (projectId) => invoke('delete_project', { projectId }),
     revealProject: (projectId) => invoke('reveal_project', { projectId }),
     onArrival: (cb) => void listen<ReportRef>('report-arrived', (e) => cb(e.payload)),
+    onRunningChanged: (cb) => void listen('running-changed', () => cb()),
     onOpenReport: (cb) => void listen<ReportRef>('open-report', (e) => cb(e.payload)),
     assetUrl: (dir, relative) => convertFileSrc(dir + '/' + relative),
   };
 }
 
 interface Fixture {
-  projects: Omit<ProjectSummary, 'unread'>[];
+  projects: Omit<ProjectSummary, 'unread' | 'running'>[];
+  running?: Record<string, RunningItem[]>;
+  sessions?: SessionItem[];
   reports: Record<string, ReportMeta[]>;
   pages: Record<string, any>;
   unread?: string[];
@@ -72,6 +87,9 @@ function mockApi(fixture: Fixture): ShowworkApi {
   const pages: Record<string, any> = { ...fixture.pages };
   const projects = fixture.projects.map((p) => ({ ...p }));
   const unread = new Set(fixture.unread ?? []);
+  const running: Record<string, RunningItem[]> = JSON.parse(JSON.stringify(fixture.running ?? {}));
+  const sessions: SessionItem[] = JSON.parse(JSON.stringify(fixture.sessions ?? []));
+  const runningChanged: Array<() => void> = [];
   const arrivals: Array<(p: ReportRef) => void> = [];
   const opens: Array<(p: ReportRef) => void> = [];
   const calls: any[] = [];
@@ -95,6 +113,26 @@ function mockApi(fixture: Fixture): ShowworkApi {
       unread.add(meta.id);
       arrivals.forEach((cb) => cb({ projectId, reportId: meta.id }));
     },
+    start(item: RunningItem) {
+      const list = (running[item.projectId] ??= []).filter((r) => r.id !== item.id);
+      running[item.projectId] = [item, ...list];
+      runningChanged.forEach((cb) => cb());
+    },
+    finish(projectId: string, runId: string) {
+      running[projectId] = (running[projectId] ?? []).filter((r) => r.id !== runId);
+      runningChanged.forEach((cb) => cb());
+    },
+    addSession(s: SessionItem) {
+      const old = sessions.findIndex((x) => x.id === s.id);
+      if (old >= 0) sessions.splice(old, 1);
+      sessions.push(s);
+      runningChanged.forEach((cb) => cb());
+    },
+    endSession(id: string) {
+      const s = sessions.find((x) => x.id === id);
+      if (s) { s.endedAt = new Date().toISOString(); s.alive = false; }
+      runningChanged.forEach((cb) => cb());
+    },
     open(projectId: string, reportId: string) {
       opens.forEach((cb) => cb({ projectId, reportId }));
     },
@@ -112,10 +150,31 @@ function mockApi(fixture: Fixture): ShowworkApi {
       return projects.map((p) => ({
         ...p,
         unread: (reports[p.id] ?? []).filter((r) => unread.has(r.id)).length,
+        running: (running[p.id] ?? []).length,
       }));
     },
     async listReports(projectId) {
-      return newestFirst(reports[projectId] ?? []);
+      return newestFirst(reports[projectId] ?? []).map((r) => ({ ...r, read: !unread.has(r.id) }));
+    },
+    async listRunning(projectId) {
+      return [...(running[projectId] ?? [])];
+    },
+    async listSessions(projectId, runId) {
+      return sessions.filter((s) => s.projectId === projectId && s.run === runId)
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id)).map((s) => ({ ...s }));
+    },
+    async listAllSessions(projectId) {
+      return sessions.filter((s) => s.projectId === projectId).map((s) => ({...s}));
+    },
+    async deleteSession(projectId, sessionId) {
+      const idx = sessions.findIndex((s) => s.projectId === projectId && s.id === sessionId);
+      if (idx >= 0 && sessions[idx].alive) throw new Error('This session is still running');
+      if (idx >= 0) sessions.splice(idx, 1);
+      runningChanged.forEach((cb) => cb());
+    },
+    async deleteRunning(projectId, runId) {
+      failing('deleteRunning');
+      running[projectId] = (running[projectId] ?? []).filter((r) => r.id !== runId);
     },
     async getReport(projectId, reportId) {
       const meta = (reports[projectId] ?? []).find((r) => r.id === reportId);
@@ -154,6 +213,7 @@ function mockApi(fixture: Fixture): ShowworkApi {
       reports[projectId] = (reports[projectId] ?? []).filter((r) => r.id !== reportId);
     },
     async deleteProject(projectId) {
+      if (sessions.some((s) => s.projectId === projectId && s.alive)) throw new Error('This session is still running');
       delete reports[projectId];
       projects.splice(projects.findIndex((p) => p.id === projectId), 1);
     },
@@ -162,6 +222,7 @@ function mockApi(fixture: Fixture): ShowworkApi {
       calls.push({ fn: 'revealProject', projectId });
     },
     onArrival: (cb) => void arrivals.push(cb),
+    onRunningChanged: (cb) => void runningChanged.push(cb),
     onOpenReport: (cb) => void opens.push(cb),
     assetUrl: (dir, relative) => dir + '/' + relative,
   };

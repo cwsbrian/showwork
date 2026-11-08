@@ -1,0 +1,84 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const {spawn} = require('node:child_process');
+const {chromium} = require('playwright');
+const actions = []; let landscape = false, ended = false, failing = false, polls = 0, pending = 0;
+const landscapeJpeg = Buffer.from('/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAKKADAAQAAAABAAAAFAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgAFAAoAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAgICAgICAwICAwUDAwMFBgUFBQUGCAYGBgYGCAoICAgICAgKCgoKCgoKCgwMDAwMDA4ODg4ODw8PDw8PDw8PD//bAEMBAgICBAQEBwQEBxALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/dAAQAA//aAAwDAQACEQMRAD8A+Y6KKK/og/n8KKKKACiiigD/0PmOiiiv6IP5/CiiigAooooA/9k=', 'base64');
+const jpeg = fs.readFileSync(path.join(__dirname, 'fixtures/ios-frame.jpg'));
+const relay = http.createServer((req,res) => {
+  res.setHeader('Cache-Control','no-store');
+  res.setHeader('Access-Control-Allow-Origin','http://localhost:5181');
+  res.setHeader('Access-Control-Allow-Headers','X-Session-Token, Content-Type');
+  res.setHeader('Access-Control-Expose-Headers','X-Frame-Seq, X-Points-Width, X-Points-Height');
+  if(req.method === 'OPTIONS') return res.end();
+  assert.equal(req.headers['x-session-token'],'test-token');
+  if(req.url === '/input') { let body=''; req.on('data', b=>body+=b); req.on('end',()=>{actions.push(JSON.parse(body));res.end('{}');}); return; }
+  polls++; if(failing){res.writeHead(503);res.end();return;} pending++;
+  const timer=setTimeout(()=>{
+    if(ended) {res.writeHead(410);res.end();return;}
+    res.setHeader('X-Frame-Seq',String(polls));res.setHeader('X-Points-Width',landscape?'800':'400');res.setHeader('X-Points-Height',landscape?'400':'800');res.setHeader('Content-Type','image/jpeg');res.end(landscape?landscapeJpeg:jpeg);
+  },150);
+  res.on('close',()=>{pending--;clearTimeout(timer);});
+});
+const app=path.resolve(__dirname,'..');
+const vite=spawn(path.join(app,'node_modules/.bin/vite'),['--port','5181','--strictPort'],{cwd:app,stdio:'ignore'});
+let browser;
+const wait=async(fn)=>{for(let n=0;n<100;n++){if(await fn())return;await new Promise(r=>setTimeout(r,100));}throw Error('wait timed out');};
+(async()=>{
+ await new Promise(r=>relay.listen(0,'127.0.0.1',r));
+ await wait(async()=>{try{return(await fetch('http://localhost:5181/')).ok;}catch{return false;}});
+ browser=await chromium.launch({headless:true,executablePath:process.env.SHOWWORK_CHROMIUM});
+ const page=await browser.newPage({viewport:{width:1200,height:800}});
+ page.on('pageerror',e=>console.error('browser error',e));
+ await page.goto('http://localhost:5181/');
+ await page.evaluate(async(port)=>{
+  const {createIosScreen}=await import('/src/views/iosSessionView.ts');
+  const {sessionLabel}=await import('/src/views/tabs.ts');
+  const s={id:'ios',projectId:'a',run:'r',kind:'ios-simulator',title:null,udid:'u',pointsWidth:400,pointsHeight:800,width:200,height:400,port,token:'test-token',alive:true,pid:1,startedAt:'now',endedAt:null};
+  if(sessionLabel(s)!=='iOS Simulator')throw Error('fallback label');
+  document.body.innerHTML='';const host=document.createElement('div');host.style='width:900px;height:700px;display:flex';document.body.append(host);
+  window.screenItem=s;window.createIosScreen=createIosScreen;window.testScreen=createIosScreen(s,true);host.append(window.testScreen);
+ },relay.address().port);
+ await page.locator('.ios-screen img[src^="blob:"]').waitFor();
+ const img=page.locator('.ios-screen img'); const b=await img.boundingBox();
+ assert.equal(await page.locator('.ios-screen .session-toolbar').count(),0,'iOS screen has no control bar');
+ assert.equal(await img.evaluate(el=>getComputedStyle(el).objectFit),'contain');
+ await page.mouse.click(b.x+b.width/2,b.y+b.height/2);await wait(()=>actions.length===1);
+ assert.deepEqual(actions[0],{type:'tap',x:200,y:400});
+ await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width+20,b.y+b.height+20);await page.mouse.up();await wait(()=>actions.length===2);
+ assert.equal(actions[1].type,'swipe');assert.ok(actions[1].x2<400&&actions[1].y2<800);assert.ok(actions[1].duration>=0.05&&actions[1].duration<=2);
+ landscape=true;await wait(async()=>await img.evaluate(el=>el.naturalWidth>el.naturalHeight));
+ await page.mouse.click(b.x+b.width/2,b.y+b.height/2);await wait(()=>actions.length===3);assert.deepEqual(actions[2],{type:'tap',x:400,y:200});
+ await page.evaluate(()=>{window.testScreen.dispose();window.testScreen.remove();window.previews=[window.createIosScreen(window.screenItem,false),window.createIosScreen(window.screenItem,false)];window.previews.forEach(el=>document.body.append(el));});
+ assert.equal(await page.locator('.ios-screen').count(),2);await new Promise(r=>setTimeout(r,400));assert.equal(pending,1,'two views share one frame request');assert.equal(await page.locator('.ios-screen .session-toolbar').count(),0);
+ const before=actions.length;await page.locator('.ios-screen img').first().click();assert.equal(actions.length,before);
+ await page.evaluate(()=>window.previews.forEach(el=>{el.dispose();el.remove();}));await wait(()=>pending===0);const count=polls;await new Promise(r=>setTimeout(r,350));assert.equal(polls,count);
+ await page.evaluate(()=>{window.testScreen=window.createIosScreen({...window.screenItem,id:'ended',alive:false},true);document.body.append(window.testScreen);});
+ await page.getByText('Simulator session ended.',{exact:true}).waitFor();assert.equal(await page.locator('.ios-screen img').isVisible(),false);
+ await page.evaluate(()=>{window.testScreen.dispose();window.testScreen.remove();window.testScreen=window.createIosScreen(window.screenItem,true);document.body.append(window.testScreen);});
+ ended=true;await page.getByText('Simulator session ended.',{exact:true}).waitFor();
+ await page.evaluate(async()=>{
+   window.testScreen.dispose();document.body.innerHTML='';
+   const {createTabs}=await import('/src/views/tabs.ts');
+   const host=document.createElement('div');host.style='height:650px';document.body.append(host);
+   window.tabs= createTabs(host,{reportHost:document.createElement('div'),screen:window.createIosScreen,closeSession:()=>{}});
+   window.tabSessions=[{...window.screenItem,id:'one',title:'First'},{...window.screenItem,id:'two',title:'Second'}];
+   window.tabs.render({key:'task1',running:true},window.tabSessions);
+ });
+ ended=false;
+ await page.getByRole('tab',{name:'Split',exact:true}).click();
+ await page.locator('.split-preview img[src^="blob:"]').first().waitFor();
+ assert.equal(await page.locator('.split-preview').count(),2);assert.equal(await page.locator('.ios-screen .session-toolbar').count(),0);
+ const splitActions=actions.length;await page.locator('.split-tile').first().click();
+ assert.equal(actions.length,splitActions,'Split click selects rather than taps device');
+ await page.locator('.ios-screen img[src^="blob:"]').waitFor();
+ await page.evaluate(()=>window.tabs.render({key:'task2',running:true},[]));await wait(()=>pending===0);
+ failing=true;
+ await page.evaluate(()=>{window.testScreen=window.createIosScreen({...window.screenItem,id:'failed'},true);document.body.append(window.testScreen);});
+ await page.getByText('Could not connect to this Simulator.',{exact:true}).waitFor();
+ assert.equal(await page.locator('.ios-screen img').isVisible(),false);
+ await page.evaluate(()=>window.testScreen.dispose());
+ console.log('ios ok: full-height frame, letterboxing, tap, bounded swipe, landscape, shared previews, abort, ended');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();vite.kill();relay.closeAllConnections();relay.close();});

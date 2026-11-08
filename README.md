@@ -104,11 +104,13 @@ For mobile apps, launch the target iOS Simulator or Android Emulator, then **ins
 
 Keep the explanation short and simple enough for a third-grade reader, while speaking respectfully to adults. Show what changed and why it helps first. Explain unfamiliar terms immediately and place code and commands under **Show details**. Keep important problems and unchecked points visible.
 
-By default, delegate only report writing to a Codex Luna or Claude Haiku subagent. The main model operates the app or simulator, captures screens, judges review findings, and inspects the final page. If model selection is unavailable, the main model writes the report and discloses the fallback. An explicit preference such as Terra or Sonnet takes precedence; do not change global model settings. This is an agent instruction, not server-enforced model routing. Open a tall capture at full size in a new tab through **Open original image**.
+By default, delegate only report writing to a Codex Luna or Claude Haiku subagent. The main model operates the app or simulator, captures screens, judges review findings, and inspects the final page. If model selection is unavailable, the main model writes the report and discloses the fallback. An explicit preference such as Terra or Sonnet takes precedence; do not change global model settings. This is an agent instruction, not server-enforced model routing. Click a capture to see it full-window; click it again (or **Actual size**) to see it pixel for pixel.
 
 Reports are kept in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS), never in the project, until you delete them from the app. Captures and check records go in a per-project temporary folder under **`/tmp`**, which the OS may clean; Windows uses its own temporary directory.
 
 The browser tool lives inside the `showwork` skill and is copied with both user and project installations. It uses only the Python standard library and updates the page automatically. See the [browser guide](skills/showwork/references/companion.md) for usage and page format. Browser choices are recorded, but they do not automatically wake a waiting agent; continue in chat when needed.
+
+Web captures can run in headless Chrome and appear as live tabs in the Showwork app; see [capture web pages in the app](skills/showwork/references/companion.md#capture-web-pages-in-the-app).
 
 ## Record verification evidence
 

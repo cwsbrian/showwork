@@ -9,9 +9,11 @@
   </head>
   <body>
     <div id="app">
-      <nav id="projects" class="col col-projects" aria-label="Projects"></nav>
-      <section id="middle" class="col col-middle" aria-label="Reports"></section>
-      <main id="report" class="col col-report" aria-label="Report"></main>
+      <section class="col col-middle">
+        <nav id="projects" class="project-switcher" aria-label="Projects"></nav>
+        <div id="middle" class="middle-scroll" aria-label="Reports"></div>
+      </section>
+      <main id="tabs" class="col col-report" aria-label="Task tabs"><div id="report" aria-label="Report"></div></main>
     </div>
     <div id="error-line" class="error-line" role="alert" hidden></div>
   </body>

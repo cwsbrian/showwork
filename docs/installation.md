@@ -119,3 +119,9 @@ claude plugin validate . --strict
 ```
 
 Run `tests/browser_companion.cjs` in a development environment with Playwright and Chromium for a real browser check. See the [validation record](validation.md) for the scope and limits.
+
+## Optional live iOS Simulator tabs
+
+On macOS, install Xcode's Simulator tools and the `idb` CLI with `idb_companion`. The installation must support `describe`, MJPEG `video-stream`, and `ui tap`, `ui swipe`, `ui text`, and `ui button HOME`. Boot the chosen Simulator yourself by explicit UDID, start a Showwork task, then attach with `companion.py simulator open --project PROJECT --udid UDID [--title TITLE]`. Detach with `companion.py simulator close --project PROJECT --session SESSION`. Showwork keeps Simulator.app closed and leaves the device boot state alone when an attachment ends.
+
+The iOS tab supports tap and swipe directly on the device image; it has no separate control bar. Use device tools such as `idb` for text and Home. Split previews accept no device input. Report screenshots still come from the agent's device capture tool and belong in `/tmp` with capture provenance. See the [companion guide](../skills/showwork/references/companion.md#live-ios-simulator-sessions-macos).

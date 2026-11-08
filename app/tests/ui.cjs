@@ -53,16 +53,41 @@ async function waitServer() {
   const context = await browser.newContext({viewport: {width: 1280, height: 800}});
   await context.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, fixture);
   const page = await context.newPage();
-  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => m.type() === 'error' && errors.push(m.text()));
+  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => m.type() === 'error' && !m.text().includes('ws://127.0.0.1:1/x') && errors.push(m.text()));
   const requested = []; page.on('request', r => requested.push(r.url()));
   await page.goto(URL_BASE);
 
   const badge = id => page.locator(`.project[data-project-id="${id}"] .badge`);
   const item = id => page.locator(`.item[data-report-id="${id}"]`);
-  await badge('a').waitFor();
+  const trigger = page.locator('.switcher-trigger');
+  const openSwitcher = async () => { if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click(); await page.locator('.switcher-pop').waitFor(); };
+  await page.locator('.switcher-name', {hasText: 'alpha'}).waitFor();
+  // the closed switcher shows the current project and counts unread reports elsewhere
+  assert.equal(await page.locator('.switcher-pop').count(), 0);
+  assert.equal(await page.locator('.others-unread').textContent(), '1');
+  await openSwitcher();
   assert.equal(await badge('a').textContent(), '2');
   assert.equal(await badge('b').textContent(), '1');
-  assert.equal(await page.locator('#projects h2').textContent(), 'Projects');
+  assert.equal(await page.locator('.project[aria-current="true"]').getAttribute('data-project-id'), 'a');
+  // Escape closes the list and returns focus to the switcher
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.switcher-pop').count(), 0);
+  assert.ok(await trigger.evaluate(el => el === document.activeElement));
+  // clicking outside closes it too
+  await openSwitcher();
+  await page.locator('#report').click();
+  assert.equal(await page.locator('.switcher-pop').count(), 0);
+
+  // unread reports carry a dot and a bold title; read ones do not
+  const unreadIds = await page.locator('.item.unread').evaluateAll(els => els.map(e => e.dataset.reportId));
+  assert.deepEqual(unreadIds, ['e-decide1', 'd-plan2']);
+  assert.equal(await page.locator('.item .unread-dot').count(), 2);
+  await item('d-plan2').click();
+  await page.waitForFunction(() => !document.querySelector('.item[data-report-id="d-plan2"]').classList.contains('unread'));
+  assert.equal(await item('d-plan2').locator('.unread-dot').count(), 0);
+  await openSwitcher();
+  await page.waitForFunction(() => document.querySelector('.project[data-project-id="a"] .badge')?.textContent === '1');
+  await page.keyboard.press('Escape');
 
   // select a report: title and files accordion
   await item('c-result1').click();
@@ -91,18 +116,82 @@ async function waitServer() {
   // arrival raises badge but does not touch the right pane
   const before = await page.locator('#report h1').textContent();
   await page.evaluate(() => window.__showworkMock.arrive('b', {id: 'new1', projectId: 'b', type: 'review', mode: 'handoff', title: 'new1 title', branch: 'x', commit: null, worktree: '/w', agent: 'claude', createdAt: '2026-02-01T00:00:00Z', version: 'v', open: false, chosen: false}, {mode: 'handoff', title: 'Brand new', summary: 's', sections: [], files: [], checks: []}));
-  await page.waitForFunction(() => document.querySelector('.project[data-project-id="b"] .badge')?.textContent === '2');
+  await page.waitForFunction(() => document.querySelector('.others-unread')?.textContent === '2');
   assert.equal(await page.locator('#report h1').textContent(), before);
   assert.equal(await item('c-result1').getAttribute('aria-current'), 'true');
 
-  // filters
+  // a started report shows as a working item with a spinner until it is published
+  await page.evaluate(() => window.__showworkMock.start({id: 'run1', projectId: 'a', type: 'review', title: null, branch: 'feat', worktree: '/w', agent: 'claude', startedAt: '2026-02-02T10:05:00Z'}));
+  const working = page.locator('.item.running[data-run-id="run1"]');
+  await working.waitFor();
+  assert.equal(await working.locator('.item-title').textContent(), 'Working on the review…');
+  assert.ok((await working.locator('.item-sub').textContent()).startsWith('In progress · started '));
+  assert.equal(await working.locator('.spinner').count(), 1);
+  assert.equal(await page.locator('.middle-body > .working-list:first-child').count(), 1); // above the reports
+  await openSwitcher();
+  assert.equal(await page.locator('.project[data-project-id="a"] .spinner').count(), 1);
+  await page.keyboard.press('Escape');
+  await working.click();
+  assert.equal(await working.getAttribute('aria-current'), 'true');
+  await page.getByText('Working on it. The report appears here when it is ready.').waitFor();
+  assert.deepEqual(await page.locator('.tab').allTextContents(), ['Report']);
+  const session = (id, title) => ({id, projectId: 'a', run: 'run1', kind: 'browser', title, url: 'http://localhost:3000/', width: 1280, height: 800, port: 1, ws: 'ws://127.0.0.1:1/x', pid: 1, startedAt: `2026-02-02T10:05:0${id.slice(-1)}Z`, endedAt: null, alive: true});
+  await page.evaluate(s => window.__showworkMock.addSession(s), session('s1', 'Login page'));
+  await page.locator('.tab', {hasText: 'Login page'}).waitFor();
+  assert.equal(await page.locator('.tab', {hasText: 'Split'}).count(), 0);
+  await page.evaluate(s => window.__showworkMock.addSession(s), session('s2', null));
+  await page.locator('.tab', {hasText: 'Split'}).click();
+  assert.equal(await page.locator('.split-tile').count(), 2);
+  assert.equal(await page.locator('.split-tile').nth(1).locator('.split-label').textContent(), 'localhost:3000');
+  await page.locator('.split-tile').first().click();
+  assert.equal(await page.locator('.tab[aria-selected="true"] span').first().textContent(), 'Login page');
+  await page.evaluate(() => window.__showworkMock.endSession('s1'));
+  await page.locator('.tab', {hasText: 'Login page · ended'}).waitFor();
+  await page.getByRole('button', {name: 'Close Login page'}).click();
+  await page.waitForFunction(() => ![...document.querySelectorAll('.tab')].some(t => t.textContent.includes('Login page')));
+  await page.evaluate(() => window.__showworkMock.endSession('s2'));
+  await page.evaluate(() => window.__showworkMock.finish('a', 'run1'));
+  await page.waitForFunction(() => !document.querySelector('.item.running'));
+  await page.locator('.tab', {hasText: 'localhost:3000 · ended'}).waitFor();
+  await page.locator('.tab', {hasText: 'Report'}).click();
+  await page.getByText('This task ended without a report.').waitFor();
+  await page.locator('.item.stopped[data-run-id="run1"]').waitFor();
+  await item('c-result1').click();
+  await page.locator('.item.stopped[data-run-id="run1"]').click();
+  await page.locator('.tab', {hasText: 'localhost:3000 · ended'}).waitFor();
+  await page.locator('.tab', {hasText: 'Report'}).click();
+  await page.getByRole('button', {name: 'Close localhost:3000'}).click();
+  await page.waitForFunction(() => !document.querySelector('.item.stopped'));
+  // right-click removes a leftover working item
+  await page.evaluate(() => window.__showworkMock.start({id: 'run2', projectId: 'a', type: 'plan', title: 'Login plan', branch: null, worktree: '/w', agent: 'codex', startedAt: 'x'}));
+  await page.locator('.item.running[data-run-id="run2"]').waitFor();
+  assert.equal(await page.locator('.item.running .item-sub').textContent(), 'In progress · codex');
+  await page.locator('.item.running').click({button: 'right'});
+  await page.getByRole('menuitem', {name: 'Remove from list'}).click();
+  await page.waitForFunction(() => !document.querySelector('.item.running'));
+
+  // filters live in a popover behind the funnel button
+  const filterBtn = page.locator('.filter-btn');
+  const openFilters = async () => { if (await filterBtn.getAttribute('aria-expanded') !== 'true') await filterBtn.click(); await page.locator('.filter-pop').waitFor(); };
+  assert.equal(await page.locator('.toolbar select').count(), 0, 'filters are hidden until the button is pressed');
+  await openFilters();
+  assert.ok(await page.getByLabel('Branch').evaluate(el => el === document.activeElement), 'focus moves into the popover');
   await page.getByLabel('Branch').selectOption('feat');
   assert.equal(await page.locator('.item').count(), 3);
+  assert.ok(await page.locator('.filter-pop').isVisible(), 'the popover stays open while choosing');
   await page.getByLabel('Type').selectOption('review');
   assert.equal(await page.locator('.item').count(), 1);
-  await page.getByLabel('Branch').selectOption('');
-  await page.getByLabel('Type').selectOption('');
+  assert.equal(await page.locator('.filter-count').textContent(), '2');
+  assert.equal(await filterBtn.getAttribute('aria-label'), 'Filters (2 on)');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.filter-pop').count(), 0);
+  assert.equal(await page.locator('.item').count(), 1, 'closing keeps the filters on');
+  await openFilters();
+  await page.getByRole('button', {name: 'Clear filters'}).click();
   assert.equal(await page.locator('.item').count(), 5);
+  assert.equal(await page.locator('.filter-count').count(), 0);
+  await page.locator('#report').click(); // clicking outside closes it
+  assert.equal(await page.locator('.filter-pop').count(), 0);
 
   // decision: tag, submit, saved state
   await item('e-decide1').click();
@@ -125,7 +214,7 @@ async function waitServer() {
   // external open is the only thing that moves selection
   await page.evaluate(() => window.__showworkMock.open('b', 'other1'));
   await page.getByRole('heading', {name: 'Other one'}).waitFor();
-  assert.equal(await page.locator('.project[data-project-id="b"]').getAttribute('aria-current'), 'true');
+  assert.equal(await page.locator('.switcher-name').textContent(), 'beta');
 
   // a closed decision shows its options but cannot be chosen
   await item('closed1').click();
@@ -155,15 +244,20 @@ async function waitServer() {
   assert.ok(await page.locator('#error-line').isHidden());
 
   // deleting the last report of the filtered branch resets the filter instead of showing an empty list
+  await openFilters();
   await page.getByLabel('Branch').selectOption('x');
+  await page.keyboard.press('Escape');
   assert.equal(await page.locator('.item').count(), 1);
   await item('new1').click({button: 'right'});
   await page.getByRole('menuitem', {name: 'Delete report'}).click();
   await page.getByRole('menuitem', {name: 'Click again to delete report'}).click();
   await page.waitForFunction(() => !document.querySelector('.item[data-report-id="new1"]'));
+  await openFilters();
   assert.equal(await page.getByLabel('Branch').inputValue(), '');
+  await page.keyboard.press('Escape');
   assert.equal(await page.locator('.item').count(), 1);
   const projectB = page.locator('.project[data-project-id="b"]');
+  await openSwitcher();
   await projectB.click({button: 'right'});
   await page.getByRole('menuitem', {name: 'Delete history'}).click();
   assert.equal(await projectB.count(), 1);
@@ -173,6 +267,12 @@ async function waitServer() {
   await page.getByRole('menuitem', {name: 'Delete history'}).click();
   await page.getByRole('menuitem', {name: 'Click again to delete history'}).click();
   await page.waitForFunction(() => !document.querySelector('.project[data-project-id="b"]'));
+  assert.equal(await page.locator('.switcher-name').textContent(), 'Select a project');
+  // picking a project from the list switches to it and closes the list
+  await page.locator('.project[data-project-id="a"]').click();
+  assert.equal(await page.locator('.switcher-pop').count(), 0);
+  await page.locator('.switcher-name', {hasText: 'alpha'}).waitFor();
+  await item('c-result1').waitFor();
 
   await page.screenshot({path: process.env.SHOWWORK_UI_SHOT || path.join(require('node:os').tmpdir(), 'showwork-ui.png')});
 
@@ -188,7 +288,7 @@ async function waitServer() {
   launched.on('pageerror', e => errors.push(e.message));
   await launched.goto(URL_BASE);
   await launched.getByRole('heading', {name: 'Other one'}).waitFor();
-  assert.equal(await launched.locator('.project[data-project-id="b"]').getAttribute('aria-current'), 'true');
+  assert.equal(await launched.locator('.switcher-name').textContent(), 'beta');
   assert.equal(await launched.locator('.item[data-report-id="other1"]').getAttribute('aria-current'), 'true');
   await launch.close();
 

@@ -61,6 +61,15 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.equal(await page.locator('#options a').count(),0,'Images must not hijack decision selection');
   await page.getByRole('radio',{name:'Compact list'}).click();
   assert.equal(await page.getByRole('radio',{name:'Compact list'}).getAttribute('aria-checked'),'true');
+  // An option image enlarges from its corner button without choosing that option.
+  const other=page.getByRole('radio').filter({hasNot:page.locator('[aria-checked="true"]')}).and(page.locator('[aria-checked="false"]')).first();
+  const otherName=await other.getAttribute('aria-label');
+  await other.getByRole('button',{name:'Enlarge image: '+otherName}).click();
+  await page.getByRole('dialog',{name:otherName}).waitFor();
+  assert.equal(await other.getAttribute('aria-checked'),'false','Enlarging does not choose the option');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('dialog').count(),0);
+  assert.equal(await page.getByRole('radio',{name:'Compact list'}).getAttribute('aria-checked'),'true');
   // A choice answered after a newer page replaced the view must not touch the new page.
   let answered;const late=new Promise(resolve=>answered=resolve);
   await page.route('**/api/choice',async route=>{const response=await route.fetch();await new Promise(r=>setTimeout(r,800));await route.fulfill({response});answered();});
@@ -163,17 +172,27 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.ok(requested.some(url=>new URL(url).pathname==='/report-view.js'&&new URL(url).origin===new URL(info.url).origin),'Renderer module is loaded from the same origin');
   assert.deepEqual([...new Set(requested.filter(url=>/^https?:/.test(url)).map(url=>new URL(url).hostname))],['127.0.0.1'],'No request leaves 127.0.0.1');
   assert.equal(await page.evaluate(()=>typeof window.renderReport),'undefined','Module does not leak globals');
-  const original=page.getByRole('link',{name:'Review capture attachment check · Open original image (new tab)'});
-  assert.equal(await original.getAttribute('rel'),'noopener');
+  // Clicking a capture opens it full-window; it fits first, a click shows actual size, Escape closes and returns focus.
+  const enlarge=page.getByRole('button',{name:'Enlarge image: Review capture attachment check'});
   assert.ok(await capture.evaluate(img=>img.naturalHeight>560),'Fixture exercises a tall capture');
-  await original.focus();
-  const popupPromise=page.waitForEvent('popup');await page.keyboard.press('Enter');const popup=await popupPromise;
-  await popup.waitForLoadState();
-  assert.equal(new URL(popup.url()).pathname,await capture.getAttribute('src'));
-  await waitFor(()=>popup.locator('img').evaluate(img=>img.complete&&img.naturalWidth===1280));
-  assert.deepEqual(await popup.locator('img').evaluate(img=>[img.naturalWidth,img.naturalHeight]),await capture.evaluate(img=>[img.naturalWidth,img.naturalHeight]));
-  assert.equal(await popup.evaluate(()=>window.opener===null),true);
-  await popup.close();
+  await enlarge.click();
+  const viewer=page.getByRole('dialog',{name:'Review capture attachment check'});
+  await viewer.waitFor();
+  const big=viewer.locator('img');
+  assert.equal(await big.getAttribute('src'),await capture.getAttribute('src'));
+  await waitFor(()=>big.evaluate(img=>img.complete&&img.naturalWidth===1280));
+  const fit=await big.boundingBox(),vp=page.viewportSize();
+  assert.ok(fit.height<=vp.height&&fit.width<=vp.width,'The enlarged image fits the window first');
+  assert.ok(await viewer.getByRole('button',{name:'Close'}).evaluate(b=>b===document.activeElement),'Focus moves into the viewer');
+  await big.click();
+  assert.equal(await viewer.getByRole('button',{name:'Fit to window'}).getAttribute('aria-pressed'),'true');
+  assert.deepEqual(await big.evaluate(img=>[img.clientWidth,img.clientHeight]),[1280,await capture.evaluate(img=>img.naturalHeight)],'Actual size is pixel for pixel');
+  await page.keyboard.press('Escape');
+  assert.equal(await viewer.count(),0);
+  assert.ok(await enlarge.evaluate(b=>b===document.activeElement),'Focus returns to the image');
+  await enlarge.press('Enter');await viewer.waitFor();
+  await page.mouse.click(5,vp.height-5); // the dark area around the image closes it
+  assert.equal(await viewer.count(),0);
   const gridWidth=await page.locator('#sections').evaluate(e=>e.clientWidth);
   assert.ok((await detailed.boundingBox()).width>gridWidth-4,'Handoff diagrams use full width');
   const heightBefore=(await detailed.boundingBox()).height;

@@ -35,6 +35,32 @@ class StoreTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_each_start_gets_a_new_run_and_replaces_the_same_kind(self):
+        repo = self.repo()
+        a = STORE.start_run(repo, "review", "claude")
+        b = STORE.start_run(repo, "review", "claude")
+        STORE.start_run(repo, "plan", "claude")
+        self.assertNotEqual(a["id"], b["id"])
+        running = STORE.store_root() / "projects" / a["project_id"] / "running"
+        self.assertEqual(sorted(p.stem for p in running.glob("*.json")), sorted([b["id"], STORE.current_run(a["project_id"], a["worktree"], "plan")["id"]]))
+
+    def test_published_report_records_its_run_and_ends_it(self):
+        repo = self.repo()
+        run = STORE.start_run(repo, "review", "claude")
+        meta = STORE.save_report(repo, page(), [], "review", "claude")
+        self.assertEqual(meta["run"], run["id"])
+        self.assertIsNone(STORE.current_run(meta["project_id"], meta["worktree"], "review"))
+        self.assertIsNone(STORE.save_report(repo, page(), [], "review", "claude")["run"])
+
+    def test_finishing_an_older_run_keeps_a_newer_start(self):
+        repo = self.repo()
+        old = STORE.start_run(repo, "review", "claude")
+        newer = dict(old, id="99990101-000000-000000-ffff")
+        running = STORE.store_root() / "projects" / old["project_id"] / "running"
+        STORE.write_json(running / (newer["id"] + ".json"), newer)
+        self.assertEqual(STORE.finish_run(old["project_id"], old["worktree"], "review", old["id"]), old["id"])
+        self.assertTrue((running / (newer["id"] + ".json")).exists())
+
     def repo(self):
         repo = self.tmp / "repo"
         repo.mkdir()

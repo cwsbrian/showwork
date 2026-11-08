@@ -9,6 +9,27 @@ Two supported modes:
 
 The companion uses Python 3.11+ with no third-party runtime dependencies. It works both in the plugin bundle and a copied Codex skill: resolve `../scripts/companion.py` relative to this guide (inside the `showwork` skill). Always pass the target project's absolute path with `--project`.
 
+## Show that work started
+
+As the first step of every Showwork command, before investigating, run:
+
+```bash
+python3 /absolute/path/to/showwork/scripts/companion.py start \
+  --project /absolute/project --type <result|plan|review|verify|adversarial-review> --agent <claude|codex>
+```
+
+It prints JSON with `directory` (the same temporary directory `path` returns), `run` and `app`. The Showwork app then lists the task as in progress with a spinner. Use the same `--type` you will publish with: `publish` replaces that working item with the report. Add `--title "short title"` only when you already know it. Running `start` again for the same type and worktree replaces the item rather than adding one. If you stop without publishing (the user cancels, or the task cannot produce a report), run `companion.py stop --project /absolute/project --type <type>`; an item that is never finished disappears from the app after three hours.
+
+## Capture web pages in the app
+
+After `companion.py start`, open each browser the task needs with:
+
+```bash
+python3 /absolute/skill/showwork/scripts/companion.py browser open --project /absolute/project --url http://localhost:3000 --title "Login page"
+```
+
+The command prints a `cdp` address and a session id. Open another session for each page or role that must be visible at the same time. Connect Playwright with `chromium.connectOverCDP(cdp)` and use `browser.contexts()[0].pages()[0]` to operate the page and save screenshots into the temporary directory returned by `companion.py path`. The Showwork app shows that browser in the selected task's tabs. Use this browser for web captures; keep the user's own browser and desktop free of capture windows. Close an unneeded session with `companion.py browser close --project /absolute/project --session <id>`. Publishing the task or running `stop` closes its remaining browsers. Attach an already-booted iOS Simulator with `simulator open` (see Live iOS Simulator sessions below).
+
 ## Explain simply, with detail available
 
 Write chat, page titles, captions and diagram labels in the user's language with short sentences and familiar words a third-grade child could understand. Speak to an adult respectfully; no baby talk, forced analogies or classroom tone. Start with what changed and why it helps, then what was checked and what remains uncertain. Usually a few sentences suffice in chat; do not repeat the whole report.
@@ -154,3 +175,16 @@ If only a label changed, explain that label change briefly; do not invent databa
 ## Limits
 
 Reports persist in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS; `SHOWWORK_STORE` overrides it for tests or advanced use only: the app does not read it, so with it set publish reports `"app": "disabled"` and the browser fallback is used; elsewhere `$XDG_DATA_HOME/showwork` or `~/.local/share/showwork`) until the user deletes them from the app. They are never put in the project, and the real code shown in a report is stored there too. Captures and one-off scripts still go in the temporary folder from `companion.py path`; it may disappear when the OS cleans `/tmp` or after a restart. Existing project `.showwork/` folders are not automatically migrated or deleted. The full session URL of the browser fallback carries a private key. Choices in the app or browser do not run code or edit product files. There is no telemetry, external API, or image-generation service. If neither the app nor the local browser can be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.
+
+### Live iOS Simulator sessions (macOS)
+
+Boot a generic device with your normal device tools, using its explicit UDID; Showwork attaches to an already booted Simulator and never opens Simulator.app or changes its boot state. Require Xcode Simulator tools, Python 3.11+, and `idb` plus `idb_companion` supporting `describe`, `video-stream --format mjpeg`, `ui tap`, `ui swipe`, `ui text`, and `ui button HOME`.
+
+```sh
+python3 /absolute/skill/showwork/scripts/companion.py simulator open --project /absolute/project --udid DEVICE-UDID --title "iPhone preview"
+python3 /absolute/skill/showwork/scripts/companion.py simulator close --project /absolute/project --session SESSION-ID
+```
+
+The selected task gets a live iOS tab. Click the device image to tap or drag it to swipe. The image fills the tab without a separate control bar; use device tools such as `idb` for text and Home. Split previews are view-only. Closing the attachment, stopping, or publishing ends its relay without shutting down the device. Ended tabs remain until removed; their last frame is available only while Showwork holds it in memory. A restarted app shows an ended placeholder.
+
+A streamed preview is not report evidence. Capture report screenshots separately with the agent's device capture tool (`idb screenshot`, `simctl io screenshot`, or an existing Maestro flow) into `/tmp`, inspect them, and record device, OS, app build, interaction and capture method. Android and real devices are not supported by this attachment.

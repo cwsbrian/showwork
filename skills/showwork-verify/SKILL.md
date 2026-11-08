@@ -12,6 +12,8 @@ Determine what the current result demonstrably does. Use the user's criteria and
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
+Start by running `companion.py start --project /absolute/project --type verify --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+
 ## Define the claims
 
 Read the task, repository instructions, relevant change, and existing validation commands. Turn important requirements into observable criteria if needed, labeling assumptions. A behavior claim should name an input or action and its expected result, not an implementation detail such as “the function exists.”
@@ -23,6 +25,7 @@ Identify the current revision and local changes so evidence can be tied to the r
 - Reuse the project's existing test and build commands. Select focused checks according to the affected behavior, plus required repository checks. Do not invent a framework or install a tool merely to complete a standard checklist.
 - For behavior changes, execute at the appropriate boundary: a focused test, request/response, CLI session, or UI interaction. Static inspection, lint, and successful compilation have narrower claims.
 - For UI, inspect a real render at relevant screen sizes and states when possible. Exercise changed interaction and basic accessibility, such as keyboard operation, when relevant. A screenshot can demonstrate appearance; it cannot by itself establish that an action works.
+- For web captures, use the [in-app browser](../showwork/references/companion.md#capture-web-pages-in-the-app).
 - Challenge likely failures according to consequence: boundary input, missing state, a partial failure, retries, permissions, or concurrent updates when those paths matter. Prefer a small check that could fail for the real defect over a test that simply mirrors the implementation.
 - Discover available runtime tools before concluding a check is impossible. If a dependency, credential, environment, or tool is missing, record that exact limitation and run any valid narrower check. Never invent successful checks, visual artifacts, or human observations.
 

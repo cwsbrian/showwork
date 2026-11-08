@@ -10,8 +10,51 @@ export interface ReportMeta {
   agent: string;
   createdAt: string;
   version: string;
+  run?: string | null;
   open: boolean;
   chosen: boolean;
+  read?: boolean;
+}
+
+interface SessionCommon {
+  id: string;
+  projectId: string;
+  run: string;
+  title: string | null;
+  width: number;
+  height: number;
+  port: number;
+  pid: number;
+  startedAt: string;
+  endedAt: string | null;
+  alive: boolean;
+}
+
+export interface BrowserSession extends SessionCommon {
+  kind: 'browser';
+  url: string;
+  ws: string;
+}
+export interface IosSession extends SessionCommon {
+  kind: 'ios-simulator';
+  udid: string;
+  pointsWidth: number;
+  pointsHeight: number;
+  token: string;
+}
+export type SessionItem = BrowserSession | IosSession;
+
+/** A report an agent has started but not published yet. */
+export interface RunningItem {
+  id: string;
+  projectId: string;
+  type: string;
+  title: string | null;
+  branch: string | null;
+  worktree: string;
+  agent: string;
+  startedAt: string;
+  ended?: boolean;
 }
 
 export interface BranchGroup {

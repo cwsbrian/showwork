@@ -96,6 +96,7 @@ pub enum StoreError {
     Closed,
     StaleVersion,
     UnknownChoice,
+    Busy,
     Io(String),
 }
 
@@ -108,6 +109,7 @@ impl fmt::Display for StoreError {
             StoreError::Closed => write!(f, "This decision is closed"),
             StoreError::StaleVersion => write!(f, "This report was updated; reload it"),
             StoreError::UnknownChoice => write!(f, "Unknown choice"),
+            StoreError::Busy => write!(f, "This session is still running"),
             StoreError::Io(message) => write!(f, "Store error: {message}"),
         }
     }
@@ -134,7 +136,28 @@ pub struct ProjectSummary {
     pub remote: Option<String>,
     pub last_activity: Option<String>,
     pub unread: usize,
+    /// Reports an agent has started but not published yet.
+    pub running: usize,
 }
+
+/// `running/<id>.json`, written by `companion.py start` and removed when the report is published.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all(serialize = "camelCase"))]
+pub struct RunningItem {
+    pub id: String,
+    pub project_id: String,
+    pub r#type: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
+    pub worktree: String,
+    pub agent: String,
+    pub started_at: String,
+}
+
+/// A marker older than this is an agent that stopped without publishing; it is hidden, not shown forever.
+pub const RUNNING_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(3 * 60 * 60);
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -150,8 +173,11 @@ pub struct ReportMeta {
     pub agent: String,
     pub created_at: String,
     pub version: String,
+    pub run: Option<String>,
     pub open: bool,
     pub chosen: bool,
+    /// Filled by the `list_reports` command from the app state; the store itself does not know it.
+    pub read: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -177,6 +203,79 @@ struct RawMeta {
     agent: String,
     created_at: String,
     version: String,
+    #[serde(default)]
+    run: Option<String>,
+}
+
+/// Transport fields are tagged on disk and flattened into the frontend contract.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind")]
+pub enum SessionTransport {
+    #[serde(rename = "browser")]
+    Browser { url: String, port: u16, ws: String },
+    #[serde(rename = "ios-simulator")]
+    IosSimulator {
+        udid: String,
+        #[serde(rename(serialize = "pointsWidth"))]
+        points_width: u32,
+        #[serde(rename(serialize = "pointsHeight"))]
+        points_height: u32,
+        port: u16,
+        token: String,
+    },
+}
+
+#[derive(Deserialize)]
+struct RawSession {
+    id: String,
+    project_id: String,
+    run: String,
+    #[serde(flatten)]
+    transport: SessionTransport,
+    title: Option<String>,
+    width: u32,
+    height: u32,
+    pid: i32,
+    started_at: String,
+    ended_at: Option<String>,
+}
+
+impl RawSession {
+    /// Used by listing, watcher snapshots and deletion, so they accept the same records.
+    fn parse(text: &str) -> Result<Self, String> {
+        let raw: Self = serde_json::from_str(text).map_err(|error| error.to_string())?;
+        if let SessionTransport::IosSimulator { udid, points_width, points_height, port, token } = &raw.transport {
+            if udid.trim().is_empty() || token.trim().is_empty()
+                || *points_width == 0
+                || *points_height == 0 || *port == 0
+            {
+                return Err("Invalid iOS simulator transport fields".into());
+            }
+        }
+        Ok(raw)
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionItem {
+    pub id: String,
+    pub project_id: String,
+    pub run: String,
+    #[serde(flatten)]
+    pub transport: SessionTransport,
+    pub title: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub pid: i32,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub alive: bool,
+}
+
+fn process_alive(pid: i32) -> bool {
+    if pid <= 0 { return false; }
+    unsafe { libc::kill(pid, 0) == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
 }
 
 #[derive(Deserialize)]
@@ -309,6 +408,8 @@ impl Store {
                 agent: raw.agent.clone(),
                 created_at: raw.created_at.clone(),
                 version: raw.version.clone(),
+                run: raw.run.clone(),
+                read: false,
             })
             .collect();
         reports.reverse();
@@ -354,6 +455,7 @@ impl Store {
                         remote: project.remote.clone().filter(|r| !r.is_empty()),
                         last_activity: newest.map(|r| r.created_at.clone()),
                         unread: reports.iter().filter(|r| !read.contains(&r.id)).count(),
+                        running: self.list_running(&project.id).map(|r| r.len()).unwrap_or(0),
                     },
                 )
             })
@@ -426,6 +528,9 @@ impl Store {
         if !dir.is_dir() {
             return Err(StoreError::NotFound);
         }
+        if self.list_all_sessions(project_id)?.iter().any(|session| session.alive) {
+            return Err(StoreError::Busy);
+        }
         Ok(remove_tree(&dir, |d| fs::remove_dir_all(d))?)
     }
 
@@ -441,6 +546,111 @@ impl Store {
         let common = PathBuf::from(project.common_dir.unwrap_or_default());
         let repo = if common.file_name().is_some_and(|n| n == ".git") { common.parent().map(Path::to_path_buf) } else { Some(common) };
         repo.filter(|p| p.is_absolute() && p.exists()).ok_or(StoreError::NotFound)
+    }
+
+    /// Working markers of a project, newest first, skipping stale, temporary and broken files.
+    pub fn list_running(&self, project_id: &str) -> Result<Vec<RunningItem>, StoreError> {
+        let dir = self.project_dir(project_id)?.join("running");
+        let mut items = Vec::new();
+        let Ok(entries) = fs::read_dir(&dir) else { return Ok(items) };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(stem) = name.strip_suffix(".json").filter(|s| valid_id(s)) else { continue };
+            let fresh = entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < RUNNING_MAX_AGE);
+            if !fresh {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(entry.path()) else { continue };
+            if let Ok(item) = serde_json::from_str::<RunningItem>(&text) {
+                if item.id == stem && item.project_id == project_id {
+                    items.push(item);
+                }
+            }
+        }
+        items.sort_by(|a, b| b.started_at.cmp(&a.started_at).then_with(|| a.id.cmp(&b.id)));
+        Ok(items)
+    }
+
+    /// Removes a working marker; one that is already gone counts as removed.
+    pub fn delete_running(&self, project_id: &str, run_id: &str) -> Result<(), StoreError> {
+        check_id(run_id)?;
+        match fs::remove_file(self.project_dir(project_id)?.join("running").join(format!("{run_id}.json"))) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(StoreError::Io(error.to_string())),
+            _ => Ok(()),
+        }
+    }
+
+    /// `(project_id, run_id, started_at)` of every shown working marker, so the watcher can tell when they change.
+    pub fn all_running(&self) -> BTreeSet<(String, String, String)> {
+        self.project_ids()
+            .into_iter()
+            .flat_map(|p| self.list_running(&p).unwrap_or_default())
+            .map(|r| (r.project_id, r.id, r.started_at))
+            .collect()
+    }
+
+    fn read_sessions(&self, project_id: &str, run_id: Option<&str>) -> Result<Vec<SessionItem>, StoreError> {
+        if let Some(run_id) = run_id { check_id(run_id)?; }
+        let dir = self.project_dir(project_id)?.join("sessions");
+        let mut items = Vec::new();
+        let Ok(entries) = fs::read_dir(dir) else { return Ok(items) };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(stem) = name.strip_suffix(".json").filter(|s| valid_id(s)) else { continue };
+            let Ok(text) = fs::read_to_string(entry.path()) else { continue };
+            let Ok(raw) = RawSession::parse(&text) else { continue };
+            if raw.id != stem || raw.project_id != project_id || run_id.is_some_and(|run| raw.run != run) { continue; }
+            let alive = raw.ended_at.is_none() && process_alive(raw.pid);
+            items.push(SessionItem {
+                id: raw.id, project_id: raw.project_id, run: raw.run, transport: raw.transport,
+                title: raw.title, width: raw.width, height: raw.height,
+                pid: raw.pid, started_at: raw.started_at,
+                ended_at: raw.ended_at, alive,
+            });
+        }
+        items.sort_by(|a, b| a.started_at.cmp(&b.started_at).then_with(|| a.id.cmp(&b.id)));
+        Ok(items)
+    }
+
+    pub fn list_sessions(&self, project_id: &str, run_id: &str) -> Result<Vec<SessionItem>, StoreError> {
+        self.read_sessions(project_id, Some(run_id))
+    }
+
+    pub fn list_all_sessions(&self, project_id: &str) -> Result<Vec<SessionItem>, StoreError> {
+        self.read_sessions(project_id, None)
+    }
+
+    pub fn delete_session(&self, project_id: &str, session_id: &str) -> Result<(), StoreError> {
+        check_id(session_id)?;
+        let path = self.project_dir(project_id)?.join("sessions").join(format!("{session_id}.json"));
+        let Ok(text) = fs::read_to_string(&path) else {
+            return if path.exists() { Err(StoreError::Io("Could not read session".into())) } else { Ok(()) };
+        };
+        let raw = RawSession::parse(&text).map_err(StoreError::Io)?;
+        if raw.id != session_id || raw.project_id != project_id { return Err(StoreError::BadId); }
+        if raw.ended_at.is_none() && process_alive(raw.pid) { return Err(StoreError::Busy); }
+        match fs::remove_file(path) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(StoreError::Io(error.to_string())),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn all_sessions(&self) -> BTreeSet<(String, String, Option<String>)> {
+        let mut items = BTreeSet::new();
+        for project_id in self.project_ids() {
+            let dir = self.projects_dir().join(&project_id).join("sessions");
+            let Ok(entries) = fs::read_dir(dir) else { continue };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let Some(stem) = name.strip_suffix(".json").filter(|s| valid_id(s)) else { continue };
+                let Ok(text) = fs::read_to_string(entry.path()) else { continue };
+                let Ok(raw) = RawSession::parse(&text) else { continue };
+                if raw.id == stem && raw.project_id == project_id {
+                    items.insert((project_id.clone(), raw.id, raw.ended_at));
+                }
+            }
+        }
+        items
     }
 
     /// `(project_id, report_id)` for every valid report, for the watcher and startup.
@@ -486,6 +696,182 @@ mod tests {
             page["options"] = json!([{"id": "a"}, {"id": "b"}]);
         }
         fs::write(dir.join("page.json"), page.to_string()).unwrap();
+    }
+
+    fn add_running(s: &Store, project: &str, id: &str, started: &str) -> PathBuf {
+        let dir = s.root.join("projects").join(project).join("running");
+        fs::create_dir_all(&dir).unwrap();
+        let run = json!({"id": id, "project_id": project, "type": "review", "title": null, "branch": "main",
+            "worktree": "/w", "agent": "claude", "started_at": started});
+        let path = dir.join(format!("{id}.json"));
+        fs::write(&path, run.to_string()).unwrap();
+        path
+    }
+
+    fn add_session(s: &Store, id: &str, run: &str, started: &str, pid: i32, ended: Option<&str>) -> PathBuf {
+        let dir = s.root.join("projects/p1/sessions");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{id}.json"));
+        fs::write(&path, json!({"id": id, "project_id": "p1", "run": run, "kind": "browser", "title": null,
+            "url": "about:blank", "width": 800, "height": 600, "port": 1234, "ws": "ws://127.0.0.1:1234/x",
+            "pid": pid, "profile": "/tmp/profile", "started_at": started, "ended_at": ended}).to_string()).unwrap();
+        path
+    }
+
+    fn ios_record() -> serde_json::Value {
+        json!({"id":"ios1","project_id":"p1","run":"r1","kind":"ios-simulator",
+            "title":"Phone","width":600,"height":1200,"pid":std::process::id(),
+            "started_at":"now","ended_at":null,"udid":"device-1",
+            "points_width":402,"points_height":874,"port":1234,"token":"secret"})
+    }
+
+    fn write_session_record(s: &Store, record: &serde_json::Value) {
+        let dir = s.root.join("projects/p1/sessions");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(format!("{}.json", record["id"].as_str().unwrap())), record.to_string()).unwrap();
+    }
+
+    #[test]
+    fn ios_sessions_are_tagged_with_camel_case_dimensions_and_no_browser_fields() {
+        let (_d, s) = store();
+        write_session_record(&s, &ios_record());
+        let sessions = s.list_sessions("p1", "r1").unwrap();
+        assert_eq!(sessions.len(), 1);
+        let encoded = serde_json::to_value(&sessions[0]).unwrap();
+        assert_eq!(encoded, json!({"id":"ios1","projectId":"p1","run":"r1","kind":"ios-simulator",
+            "title":"Phone","width":600,"height":1200,"pid":std::process::id(),
+            "startedAt":"now","endedAt":null,"alive":true,"udid":"device-1",
+            "pointsWidth":402,"pointsHeight":874,"port":1234,"token":"secret"}));
+        assert_eq!(s.all_sessions().len(), 1);
+        assert!(s.list_sessions("p1", "other").unwrap().is_empty());
+    }
+
+    #[test]
+    fn malformed_ios_and_unknown_kinds_are_skipped_by_every_listing() {
+        let (_d, s) = store();
+        for field in ["udid", "token", "points_width", "points_height", "port"] {
+            let mut record = ios_record();
+            record.as_object_mut().unwrap().remove(field);
+            write_session_record(&s, &record);
+            assert!(s.list_all_sessions("p1").unwrap().is_empty(), "{field}");
+            assert!(s.all_sessions().is_empty(), "{field}");
+        }
+        for field in ["udid", "token"] {
+            let mut record = ios_record();
+            record[field] = json!("");
+            write_session_record(&s, &record);
+            assert!(s.list_all_sessions("p1").unwrap().is_empty(), "{field}");
+        }
+        for field in ["points_width", "points_height", "port"] {
+            let mut record = ios_record();
+            record[field] = json!(0);
+            write_session_record(&s, &record);
+            assert!(s.list_all_sessions("p1").unwrap().is_empty(), "{field}");
+        }
+        let path = add_session(&s, "ios1", "r1", "now", std::process::id() as i32, None);
+        let mut record: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        record["kind"] = json!("unknown");
+        write_session_record(&s, &record);
+        assert!(s.list_all_sessions("p1").unwrap().is_empty());
+        assert!(s.all_sessions().is_empty());
+    }
+
+    #[test]
+    fn ios_deletion_protects_live_relay_and_allows_ended_or_dead_relay() {
+        let (_d, s) = store();
+        let mut record = ios_record();
+        write_session_record(&s, &record);
+        assert_eq!(s.delete_session("p1", "ios1"), Err(StoreError::Busy));
+        assert_eq!(s.delete_project("p1"), Err(StoreError::Busy));
+        record["ended_at"] = json!("done");
+        write_session_record(&s, &record);
+        assert!(!s.list_all_sessions("p1").unwrap()[0].alive);
+        s.delete_session("p1", "ios1").unwrap();
+        record["ended_at"] = serde_json::Value::Null;
+        let mut exited = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+        record["pid"] = json!(exited.id());
+        exited.wait().unwrap();
+        write_session_record(&s, &record);
+        assert!(!s.list_all_sessions("p1").unwrap()[0].alive);
+        s.delete_session("p1", "ios1").unwrap();
+        assert!(s.list_all_sessions("p1").unwrap().is_empty());
+    }
+
+    #[test]
+    fn browser_session_json_contract_is_unchanged() {
+        let (_d, s) = store();
+        add_session(&s, "s1", "r1", "now", 0, None);
+        let session = s.list_all_sessions("p1").unwrap().remove(0);
+        assert_eq!(serde_json::to_value(session).unwrap(), json!({
+            "id":"s1","projectId":"p1","run":"r1","kind":"browser","title":null,
+            "url":"about:blank","width":800,"height":600,"port":1234,
+            "ws":"ws://127.0.0.1:1234/x","pid":0,"startedAt":"now","endedAt":null,"alive":false}));
+    }
+
+    #[test]
+    fn sessions_are_sorted_filtered_and_deletable_only_after_end() {
+        let (_d, s) = store();
+        add_project(&s, "p1", "alpha", "/r/.git", None);
+        let own_pid = std::process::id() as i32;
+        add_session(&s, "s1", "r1", "02", own_pid, None);
+        add_session(&s, "s0", "r1", "01", own_pid, Some("done"));
+        add_session(&s, "s2", "r2", "00", own_pid, None);
+        fs::write(s.root.join("projects/p1/sessions/broken.json"), "{").unwrap();
+        let list = s.list_sessions("p1", "r1").unwrap();
+        assert_eq!(list.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), ["s0", "s1"]);
+        assert_eq!(s.list_all_sessions("p1").unwrap().len(), 3);
+        assert!(!list[0].alive && list[1].alive);
+        let encoded = serde_json::to_value(&list[0]).unwrap();
+        assert_eq!(encoded["startedAt"], "01");
+        assert_eq!(encoded["endedAt"], "done");
+        assert_eq!(s.delete_session("p1", "s1"), Err(StoreError::Busy));
+        assert_eq!(s.delete_project("p1"), Err(StoreError::Busy));
+        s.delete_session("p1", "s0").unwrap();
+        s.delete_session("p1", "s0").unwrap();
+        assert_eq!(s.delete_session("p1", "../x"), Err(StoreError::BadId));
+        assert_eq!(s.all_sessions().len(), 2);
+    }
+
+    #[test]
+    fn report_meta_carries_optional_run() {
+        let (_d, s) = store();
+        add_project(&s, "p1", "alpha", "/r/.git", None);
+        add_report(&s, "p1", "r1", "handoff", "/w", "v1");
+        add_report(&s, "p1", "r2", "handoff", "/w", "v2");
+        let path = s.root.join("projects/p1/reports/r2/meta.json");
+        let mut meta: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        meta["run"] = json!("run2");
+        fs::write(path, meta.to_string()).unwrap();
+        let reports = s.list_reports("p1").unwrap();
+        assert_eq!(reports[0].run.as_deref(), Some("run2"));
+        assert_eq!(reports[1].run, None);
+    }
+
+    #[test]
+    fn running_markers_list_newest_first_and_hide_stale_or_broken_ones() {
+        let (_d, s) = store();
+        add_project(&s, "p1", "alpha", "/r/.git", None);
+        add_running(&s, "p1", "older", "2026-11-06T10:00:00+00:00");
+        add_running(&s, "p1", "newer", "2026-11-06T11:00:00+00:00");
+        let stale = add_running(&s, "p1", "stale", "2026-11-06T12:00:00+00:00");
+        let old = std::time::SystemTime::now() - RUNNING_MAX_AGE - std::time::Duration::from_secs(60);
+        fs::File::options().write(true).open(&stale).unwrap().set_modified(old).unwrap();
+        let running = s.root.join("projects/p1/running");
+        fs::write(running.join(".pending-x"), "{").unwrap();
+        fs::write(running.join("broken.json"), "{").unwrap();
+        fs::write(running.join("other.json"), json!({"id": "mismatch", "project_id": "p1", "type": "plan", "worktree": "/w", "agent": "x", "started_at": "z"}).to_string()).unwrap();
+        let ids: Vec<String> = s.list_running("p1").unwrap().into_iter().map(|r| r.id).collect();
+        assert_eq!(ids, ["newer", "older"]);
+        assert_eq!(s.list_projects(&BTreeSet::new()).unwrap()[0].running, 2);
+        assert_eq!(s.all_running().len(), 2);
+        let json = serde_json::to_value(&s.list_running("p1").unwrap()[0]).unwrap();
+        assert_eq!(json["startedAt"], "2026-11-06T11:00:00+00:00");
+        assert_eq!(json["projectId"], "p1");
+        s.delete_running("p1", "newer").unwrap();
+        s.delete_running("p1", "newer").unwrap(); // already gone is fine
+        assert_eq!(s.list_running("p1").unwrap().len(), 1);
+        assert_eq!(s.delete_running("p1", "../x"), Err(StoreError::BadId));
+        assert!(s.list_running("missing").unwrap().is_empty());
     }
 
     #[test]

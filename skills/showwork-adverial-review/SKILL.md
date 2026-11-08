@@ -12,6 +12,8 @@ Keep the public command spelling `adverial-review`. Use the user's language. Thi
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
+Start by running `companion.py start --project /absolute/project --type adversarial-review --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+
 ## Establish scope and challenge assumptions
 
 Read [Showwork Review](../showwork-review/SKILL.md) and follow its scope, full-diff, severity and evidence rules. Reuse the user's stated branch/PR/local scope. When no scope is given, inspect the working tree and branch context; ask only if the review target/base cannot be inferred. Do not silently review only HEAD. Record base, head and local changes so findings and captures identify the reviewed state.
@@ -24,7 +26,7 @@ For each actionable finding, retain a stable ID, practical priority (P0 urgent, 
 
 Identify the target from repository manifests and build/run documentation, not just the presence of a small-screen screenshot.
 
-- Web: run the project through its existing development/test setup, exercise affected flows and capture relevant states with available browser tools.
+- Web: run the project through its existing development/test setup, exercise affected flows and capture relevant states with the [in-app browser](../showwork/references/companion.md#capture-web-pages-in-the-app).
 - Mobile (native, Flutter, React Native, etc.): read [mobile runtime evidence](references/mobile.md). Build/install the reviewed app, boot or reuse a suitable simulator/emulator, launch it, exercise the affected flow and capture actual screens. Do this for the targeted platforms; do not silently substitute Android for iOS or a desktop viewport for either. If scope does not specify platforms, derive them from affected code and state coverage. Missing tools/runtime/build credentials must produce an explicit gap, not a fabricated screenshot or a clean mobile verdict.
 - API/CLI/library: exercise the relevant interface; use observed outputs and connected diagrams. Do not add unrelated UI work.
 

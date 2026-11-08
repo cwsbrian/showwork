@@ -1,6 +1,8 @@
 """Persistent report store shared by the companion, the browser and the desktop app."""
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import json
 import os
@@ -120,6 +122,62 @@ def write_json(path, value):
         Path(temporary).unlink(missing_ok=True)
 
 
+def sessions_dir(project_id):
+    if not ID_PATTERN.fullmatch(project_id):
+        raise ValueError("Invalid project id")
+    path = store_root() / "projects" / project_id / "sessions"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def list_sessions(project_id, run_id=None):
+    if not ID_PATTERN.fullmatch(project_id) or (run_id is not None and not ID_PATTERN.fullmatch(run_id)):
+        return []
+    folder = sessions_dir(project_id)
+    sessions = []
+    for path in sorted(folder.glob("*.json")):
+        if not ID_PATTERN.fullmatch(path.stem):
+            continue
+        try:
+            session = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(session, dict) and session.get("id") == path.stem and session.get("project_id") == project_id:
+            if run_id is None or session.get("run") == run_id:
+                sessions.append(session)
+    return sessions
+
+
+def write_session(session):
+    project_id, session_id = session["project_id"], session["id"]
+    if not ID_PATTERN.fullmatch(project_id) or not ID_PATTERN.fullmatch(session_id):
+        raise ValueError("Invalid session id")
+    write_json(sessions_dir(project_id) / (session_id + ".json"), session)
+
+
+@contextmanager
+def simulator_lifecycle_lock():
+    """Serialize device claims and run-marker mutations across companion processes."""
+    with (store_root() / '.ios-simulator.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def cleanup_sessions(project_id, run_id=None):
+    """Attempt every owner's cleanup even if another owner fails."""
+    import browser
+    import ios_simulator
+    errors = []
+    for owner in (browser, ios_simulator):
+        if run_id:
+            try: owner.close_run(project_id, run_id)
+            except Exception as error: errors.append(error)
+        try: owner.close_orphans(project_id)
+        except Exception as error: errors.append(error)
+    if errors:
+        raise ValueError("Session cleanup failed: " + "; ".join(str(error) for error in errors))
+
+
 def save_report(project, page, images, report_type, agent):
     project = Path(project).expanduser()
     identity = project_identity(project)
@@ -131,6 +189,7 @@ def save_report(project, page, images, report_type, agent):
     now = datetime.now(timezone.utc)
     state = git_state(project)
     worktree = worktree_key(project)
+    run = current_run(identity["id"], worktree, report_type)
     while True:
         report_id = new_report_id(datetime.now(timezone.utc))
         pending = reports / (".pending-" + report_id)
@@ -146,7 +205,7 @@ def save_report(project, page, images, report_type, agent):
             meta = {
                 "id": report_id, "project_id": identity["id"], "type": report_type, "mode": page["mode"],
                 "title": page["title"], "branch": state["branch"], "commit": state["commit"],
-                "worktree": worktree, "agent": agent,
+                "worktree": worktree, "agent": agent, "run": run["id"] if run else None,
                 "created_at": page.get("published_at") or now.isoformat(), "version": page["version"],
             }
             write_json(pending / "page.json", page)
@@ -159,8 +218,86 @@ def save_report(project, page, images, report_type, agent):
                 raise
         finally:
             shutil.rmtree(pending, ignore_errors=True)
+        if meta["run"]:
+            finish_run(identity["id"], worktree, report_type, meta["run"])
+            cleanup_sessions(identity["id"], meta["run"])
         close_older_decisions(meta)
         return meta
+
+
+def matching_runs(project_id, worktree, report_type):
+    """Markers for this worktree and report type, newest first."""
+    runs = []
+    try:
+        for path in (store_root() / "projects" / project_id / "running").glob("*.json"):
+            try:
+                run = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(run, dict) and run.get("worktree") == worktree and run.get("type") == report_type:
+                runs.append((path, run))
+    except OSError:
+        pass
+    return sorted(runs, key=lambda item: item[1].get("id") or item[0].stem, reverse=True)
+
+
+def current_run(project_id, worktree, report_type):
+    """The newest "working" marker for this worktree and report type, or None."""
+    runs = matching_runs(project_id, worktree, report_type)
+    return runs[0][1] if runs else None
+
+
+def start_run(project, report_type, agent, title=None):
+    with simulator_lifecycle_lock():
+        return _start_run(project, report_type, agent, title)
+
+
+def _start_run(project, report_type, agent, title=None):
+    """Record that an agent started a report, so the app can show it as in progress.
+    Each start is a new run; older markers of the same worktree and type are replaced."""
+    project = Path(project).expanduser()
+    identity = project_identity(project)
+    project_dir = store_root() / "projects" / identity["id"]
+    running = project_dir / "running"
+    running.mkdir(parents=True, exist_ok=True)
+    write_json(project_dir / "project.json", identity)
+    state = git_state(project)
+    worktree = worktree_key(project)
+    now = datetime.now(timezone.utc)
+    run = {
+        "id": new_report_id(now), "project_id": identity["id"], "type": report_type, "title": title or None,
+        "branch": state["branch"], "worktree": worktree, "agent": agent,
+        "started_at": now.isoformat(timespec="seconds"),
+    }
+    write_json(running / (run["id"] + ".json"), run)
+    for path, old in matching_runs(identity["id"], worktree, report_type):
+        if old.get("id", "") < run["id"]:
+            path.unlink(missing_ok=True)
+    return run
+
+
+def finish_run(project_id, worktree, report_type, up_to_id=None):
+    try:
+        with simulator_lifecycle_lock():
+            return _finish_run(project_id, worktree, report_type, up_to_id)
+    except Exception:
+        return None
+
+
+def _finish_run(project_id, worktree, report_type, up_to_id=None):
+    """Remove the matching "working" markers and return the newest one's id; never raises,
+    a leftover marker only ages out in the app."""
+    try:
+        runs = matching_runs(project_id, worktree, report_type)
+        stopped = [(path, run) for path, run in runs if up_to_id is None or (run.get("id") or path.stem) <= up_to_id]
+        for path, _ in stopped:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return (stopped[0][1].get("id") or stopped[0][0].stem) if stopped else None
+    except Exception:
+        return None
 
 
 def close_older_decisions(newer):

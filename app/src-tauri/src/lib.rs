@@ -18,7 +18,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
 use state::{UiState, View};
-use store::{ProjectSummary, ReportDetail, ReportMeta, Store};
+use store::{ProjectSummary, ReportDetail, ReportMeta, RunningItem, SessionItem, Store};
 
 type Ui = Mutex<UiState>;
 
@@ -61,8 +61,38 @@ fn list_projects(store: State<Store>, ui: State<Ui>) -> Result<Vec<ProjectSummar
 }
 
 #[tauri::command]
-fn list_reports(store: State<Store>, project_id: String) -> Result<Vec<ReportMeta>, String> {
-    store.list_reports(&project_id).map_err(err)
+fn list_reports(store: State<Store>, ui: State<Ui>, project_id: String) -> Result<Vec<ReportMeta>, String> {
+    let mut reports = store.list_reports(&project_id).map_err(err)?;
+    let ui = lock(&ui);
+    for r in &mut reports {
+        r.read = ui.read.contains(&r.id);
+    }
+    Ok(reports)
+}
+
+#[tauri::command]
+fn list_running(store: State<Store>, project_id: String) -> Result<Vec<RunningItem>, String> {
+    store.list_running(&project_id).map_err(err)
+}
+
+#[tauri::command]
+fn delete_running(store: State<Store>, project_id: String, run_id: String) -> Result<(), String> {
+    store.delete_running(&project_id, &run_id).map_err(err)
+}
+
+#[tauri::command]
+fn list_sessions(store: State<Store>, project_id: String, run_id: String) -> Result<Vec<SessionItem>, String> {
+    store.list_sessions(&project_id, &run_id).map_err(err)
+}
+
+#[tauri::command]
+fn list_all_sessions(store: State<Store>, project_id: String) -> Result<Vec<SessionItem>, String> {
+    store.list_all_sessions(&project_id).map_err(err)
+}
+
+#[tauri::command]
+fn delete_session(store: State<Store>, project_id: String, session_id: String) -> Result<(), String> {
+    store.delete_session(&project_id, &session_id).map_err(err)
 }
 
 #[tauri::command]
@@ -235,6 +265,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_projects,
             list_reports,
+            list_running,
+            delete_running,
+            list_sessions,
+            list_all_sessions,
+            delete_session,
             get_report,
             submit_choice,
             mark_read,
@@ -254,7 +289,14 @@ pub fn run() {
                         let handle = handle.clone();
                         move |project_id, report_id| on_arrival(&handle, project_id, report_id)
                     };
-                    match watch::start(Store { root: root.clone() }, on_new) {
+                    let on_running = {
+                        let handle = handle.clone();
+                        move || {
+                            let result = handle.emit("running-changed", ());
+                            log!("emit running-changed: {result:?}");
+                        }
+                    };
+                    match watch::start(Store { root: root.clone() }, on_new, on_running) {
                         Ok(watcher) => {
                             app.manage(Mutex::new(watcher)); // keep it alive for the app's lifetime
                         }

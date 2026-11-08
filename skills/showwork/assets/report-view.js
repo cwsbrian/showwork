@@ -107,7 +107,7 @@
 export function renderReport(root, page, hooks) {
   const p = hooks.idPrefix || '';
   const $ = id => root.querySelector('[id="' + p + id + '"]');
-  let selected = null, saved = null, sending = false, observers = [], destroyed = false, unavailable = false;
+  let selected = null, saved = null, sending = false, observers = [], destroyed = false, unavailable = false, lightbox = null;
   const unavailableText = hooks.unavailableText || 'Disconnected. Your choice cannot be saved right now.';
   root.innerHTML = `
       <div id="${p}mode" class="eyebrow"></div><h1 id="${p}title"></h1><p class="r-summary" id="${p}summary"></p>
@@ -120,12 +120,39 @@ export function renderReport(root, page, hooks) {
       <section class="r-verification" id="${p}verification" hidden><h2>Checks and open questions</h2><div id="${p}checks" class="checks"></div></section>
       <footer id="${p}footer"></footer>
 `;
-    function visual(item, openOriginal=false) {
+    // Full-window image viewer: fits the window first; clicking the image (or "Actual size") shows it pixel for pixel.
+    function closeLightbox(){ if(!lightbox) return; const {overlay,opener}=lightbox; lightbox=null; overlay.remove(); document.removeEventListener('keydown',lightboxKeys,true); if(opener&&opener.isConnected) opener.focus(); }
+    function lightboxKeys(e){ if(!lightbox) return; if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeLightbox(); }
+      else if(e.key==='Tab'){ const items=[...lightbox.overlay.querySelectorAll('button')],at=items.indexOf(document.activeElement); e.preventDefault(); items[(at+(e.shiftKey?-1:1)+items.length)%items.length].focus(); } }
+    function openLightbox(src,title,opener){
+      closeLightbox();
+      const overlay=document.createElement('div');overlay.className='r-lightbox';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label',title);
+      const bar=document.createElement('div');bar.className='r-lightbox-bar';
+      const size=text('button','Actual size','r-lightbox-size');size.type='button';size.setAttribute('aria-pressed','false');
+      const close=text('button','×','r-lightbox-close');close.type='button';close.setAttribute('aria-label','Close');
+      bar.append(text('span',title,'r-lightbox-title'),size,close);
+      const stage=document.createElement('div');stage.className='r-lightbox-stage';
+      const img=document.createElement('img');img.src=src;img.alt=title;stage.append(img);
+      const toggle=()=>{const actual=overlay.classList.toggle('actual');size.setAttribute('aria-pressed',String(actual));size.textContent=actual?'Fit to window':'Actual size';};
+      img.onclick=e=>{e.stopPropagation();toggle();};size.onclick=toggle;close.onclick=closeLightbox;
+      stage.onclick=e=>{if(e.target===stage)closeLightbox();};
+      overlay.append(bar,stage);document.body.append(overlay);
+      lightbox={overlay,opener};document.addEventListener('keydown',lightboxKeys,true);close.focus();
+    }
+    function zoomButton(src,title,cls,label){
+      const button=document.createElement('button');button.type='button';button.className=cls;button.setAttribute('aria-label',label+': '+title);button.title=label;
+      button.onclick=e=>{e.stopPropagation();openLightbox(src,title,button);};
+      button.onkeydown=e=>{if(e.key===' '||e.key==='Enter')e.stopPropagation();};
+      return button;
+    }
+    function visual(item, zoomable=false) {
       if(item.image) {
-        const img=document.createElement('img'); img.className='visual-image'; img.src=hooks.assetUrl(item.image); img.alt=item.title;
-        if(!openOriginal) return img;
-        const wrapper=document.createElement('div');const link=text('a',item.title+' · Open original image (new tab)','card-copy');
-        link.href=hooks.assetUrl(item.image);link.target='_blank';link.rel='noopener';link.style.display='block';wrapper.append(img,link);return wrapper;
+        const src=hooks.assetUrl(item.image);
+        const img=document.createElement('img'); img.className='visual-image'; img.src=src; img.alt=item.title;
+        if(zoomable){ const button=zoomButton(src,item.title,'r-zoom','Enlarge image');button.append(img,text('span','Click to enlarge','r-zoom-hint'));return button; }
+        // An option image: the card chooses the option, so enlarging gets its own small button.
+        const wrapper=document.createElement('div');wrapper.className='r-zoom-wrap';const corner=zoomButton(src,item.title,'r-zoom-corner','Enlarge image');corner.textContent='⤢';
+        wrapper.append(img,corner);return wrapper;
       }
       const frame=document.createElement('iframe'); frame.title=item.title; frame.setAttribute('sandbox','allow-same-origin');
       frame.srcdoc='<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:24px;font:15px/1.5 system-ui;color:#172f34;box-sizing:border-box;overflow-wrap:anywhere}*{box-sizing:border-box}svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d9e3e0;vertical-align:top}pre{white-space:pre-wrap}summary{cursor:pointer}</style>'+item.html;
@@ -241,7 +268,7 @@ export function renderReport(root, page, hooks) {
     };
   render();
   return {
-    destroy() { destroyed = true; observers.forEach(observer => observer.disconnect()); observers = []; },
+    destroy() { destroyed = true; closeLightbox(); observers.forEach(observer => observer.disconnect()); observers = []; },
     // Call when connected() may have changed.
     refresh() { if (!destroyed && page.mode === 'decision') syncAvailable(); }
   };

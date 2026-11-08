@@ -21,6 +21,8 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from runtime import workspace
 import store
+import browser
+import ios_simulator
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 TEMPLATE = ASSETS / "companion.html"
@@ -334,9 +336,14 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     sub = cli.add_subparsers(dest="action", required=True)
-    for name in ["path", "serve", "publish", "events"]:
+    for name in ["path", "start", "stop", "serve", "publish", "events"]:
         command = sub.add_parser(name)
         command.add_argument("--project", required=True, type=Path)
+        if name in ("start", "stop"):
+            command.add_argument("--type", choices=REPORT_TYPES, default="result")
+        if name == "start":
+            command.add_argument("--agent", choices=["claude", "codex"])
+            command.add_argument("--title")
         if name == "serve":
             command.add_argument("--port", type=int, default=0)
             command.add_argument("--open", action="store_true")
@@ -346,6 +353,27 @@ def main():
             command.add_argument("--agent", choices=["claude", "codex"])
         if name == "events":
             command.add_argument("--report")
+    browser_cmd = sub.add_parser("browser")
+    browser_sub = browser_cmd.add_subparsers(dest="browser_action", required=True)
+    browser_open = browser_sub.add_parser("open")
+    browser_open.add_argument("--project", required=True, type=Path)
+    browser_open.add_argument("--url", required=True)
+    browser_open.add_argument("--title")
+    browser_open.add_argument("--width", type=int, default=1280)
+    browser_open.add_argument("--height", type=int, default=800)
+    browser_close = browser_sub.add_parser("close")
+    browser_close.add_argument("--project", required=True, type=Path)
+    browser_close.add_argument("--session", required=True)
+    simulator_cmd = sub.add_parser("simulator")
+    simulator_sub = simulator_cmd.add_subparsers(dest="simulator_action", required=True)
+    for action in ("open", "close"):
+        command = simulator_sub.add_parser(action)
+        command.add_argument("--project", required=True, type=Path)
+        if action == "open":
+            command.add_argument("--udid", required=True)
+            command.add_argument("--title")
+        else:
+            command.add_argument("--session", required=True)
     args = cli.parse_args()
     try:
         if not args.project.is_dir():
@@ -354,6 +382,34 @@ def main():
             root = directory(args.project)
             root.mkdir(exist_ok=True)
             print(root)
+        elif args.action == "start":
+            store.cleanup_sessions(store.project_identity(args.project)["id"])
+            root = directory(args.project)
+            root.mkdir(exist_ok=True)
+            run = store.start_run(args.project, args.type, store.detect_agent(args.agent), args.title)
+            store.cleanup_sessions(store.project_identity(args.project)["id"])
+            print(json.dumps({"directory": str(root), "run": run["id"], "type": run["type"], "app": open_app()}))
+        elif args.action == "stop":
+            identity = store.project_identity(args.project)
+            run_id = store.finish_run(identity["id"], store.worktree_key(args.project), args.type)
+            store.cleanup_sessions(identity["id"], run_id)
+            print(json.dumps({"stopped": args.type}))
+        elif args.action == "simulator":
+            if args.simulator_action == "open":
+                session = ios_simulator.open_simulator(args.project, args.udid, args.title)
+                print(json.dumps({"session": session["id"], "run": session["run"], "endpoint": f"http://127.0.0.1:{session['port']}"}))
+            else:
+                ios_simulator.close_simulator(store.project_identity(args.project)["id"], args.session)
+                print(json.dumps({"closed": args.session}))
+        elif args.action == "browser":
+            if args.browser_action == "open":
+                session = browser.open_browser(args.project, args.url, args.title, args.width, args.height)
+                print(json.dumps({"session": session["id"], "run": session["run"],
+                                  "cdp": f"http://127.0.0.1:{session['port']}", "ws": session["ws"]}))
+            else:
+                identity = store.project_identity(args.project)
+                browser.close_browser(identity["id"], args.session)
+                print(json.dumps({"closed": args.session}))
         elif args.action == "publish":
             page = publish(args.project, args.file, args.type, args.agent)
             meta = page["report"]

@@ -12,6 +12,8 @@ Make the proposed change understandable and buildable. Planning is the deliverab
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
+Start by running `companion.py start --project /absolute/project --type plan --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+
 ## Understand the actual change
 
 - Read the request, repository instructions, and relevant existing code. Trace the current behavior and affected callers; distinguish observations from assumptions.

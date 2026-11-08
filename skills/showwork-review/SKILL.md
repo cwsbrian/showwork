@@ -12,6 +12,8 @@ Report actionable defects and evidence gaps in the requested change. Do not edit
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
+Start by running `companion.py start --project /absolute/project --type review --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+
 ## Establish what is being reviewed
 
 - Identify the intended behavior, acceptance criteria, target branch or base, and head or local state. Read the complete relevant diff and added files, then affected callers and existing tests.
@@ -26,6 +28,8 @@ Follow changed execution paths and compare them with the intended outcome. Scale
 Choose plausible failure cases, not a generic checklist. Examples include boundary input, missing or stale state, partial success, repeated actions, conflicting updates, incompatible callers, or a user unable to complete the UI flow. Look for the shared root cause when multiple callers are affected.
 
 Run focused, safe checks with existing capabilities when they can confirm a concern. Verify the rendered result for visual claims when a runnable UI is available; distinguish a source-level suspicion from an observed visual defect. Do not create real external side effects simply to reproduce a finding without authorization.
+
+For web captures, use the [in-app browser](../showwork/references/companion.md#capture-web-pages-in-the-app).
 
 Review is a challenge to the implementation's assumptions. Test passing alone is not proof of correctness. Check whether the evidence actually covers the criteria, relevant failure behavior, and the current version of the change.
 

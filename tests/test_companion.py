@@ -266,6 +266,32 @@ class CompanionTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(SCRIPT), *args, "--project", str(project or self.project)],
                               capture_output=True, text=True, timeout=10, env=env)
 
+    def test_start_shows_a_working_marker_until_publish_or_stop(self):
+        started = self.cli("start", "--type", "review", "--agent", "claude", "--title", "Login review")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        out = json.loads(started.stdout)
+        self.assertTrue(Path(out["directory"]).is_dir())
+        self.assertEqual((out["type"], out["app"]), ("review", "disabled"))
+        project_id = COMPANION.store.project_identity(self.project)["id"]
+        running = Path(self.store_dir.name) / "projects" / project_id / "running"
+        self.assertTrue((running.parent / "project.json").is_file())
+        marker = json.loads((running / (out["run"] + ".json")).read_text())
+        self.assertEqual((marker["type"], marker["title"], marker["agent"]), ("review", "Login review", "claude"))
+        # starting the same type again replaces the marker instead of adding one
+        again = json.loads(self.cli("start", "--type", "review").stdout)["run"]
+        self.assertNotEqual(again, out["run"])
+        self.assertEqual([p.stem for p in running.glob("*.json")], [again])
+        self.cli("start", "--type", "plan")
+        self.assertEqual(len(list(running.glob("*.json"))), 2)
+        page = Path(out["directory"]) / "review.json"
+        page.write_text(json.dumps({**HANDOFF, "checks": []}))
+        published = self.cli("publish", "--file", str(page), "--type", "review")
+        self.assertEqual(published.returncode, 0, published.stderr)
+        self.assertFalse((running / (again + ".json")).exists())
+        # a stopped run without a report leaves nothing behind
+        self.assertEqual(self.cli("stop", "--type", "plan").returncode, 0)
+        self.assertEqual(list(running.glob("*.json")), [])
+
     def test_each_publish_creates_a_new_report(self):
         a, b = self.publish(DECISION), self.publish(DECISION)
         self.assertNotEqual(a["report"]["id"], b["report"]["id"])
@@ -381,6 +407,33 @@ class CompanionTest(unittest.TestCase):
         out = json.loads(result.stdout)
         self.assertEqual((out["app"], out["mode"]), ("disabled", "decision"))
         self.assertTrue(Path(out["path"], "page.json").is_file())
+
+
+class SimulatorCleanupTests(unittest.TestCase):
+    def test_cleanup_attempts_both_owners_after_browser_failure(self):
+        with patch.object(COMPANION.browser, 'close_run', side_effect=ValueError('browser failed')), \
+             patch.object(COMPANION.browser, 'close_orphans') as browser_orphans, \
+             patch.object(COMPANION.ios_simulator, 'close_run') as ios_run, \
+             patch.object(COMPANION.ios_simulator, 'close_orphans') as ios_orphans:
+            with self.assertRaisesRegex(ValueError, 'browser failed'):
+                COMPANION.store.cleanup_sessions('project', 'run')
+            browser_orphans.assert_called_once_with('project')
+            ios_run.assert_called_once_with('project', 'run')
+            ios_orphans.assert_called_once_with('project')
+
+    def test_stop_completes_run_before_scanning_both_session_owners(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        events = []
+        with tempfile.TemporaryDirectory() as project, \
+             patch.object(sys, 'argv', ['companion.py','stop','--project',project]), \
+             patch.object(COMPANION.store, 'project_identity', return_value={'id':'project'}), \
+             patch.object(COMPANION.store, 'worktree_key', return_value='tree'), \
+             patch.object(COMPANION.store, 'finish_run', side_effect=lambda *args: events.append('finish') or 'run'), \
+             patch.object(COMPANION.store, 'cleanup_sessions', side_effect=lambda *args: events.append(('cleanup', args))), \
+             redirect_stdout(StringIO()):
+            self.assertEqual(COMPANION.main(), 0)
+        self.assertEqual(events, ['finish', ('cleanup', ('project', 'run'))])
 
 
 if __name__ == "__main__":

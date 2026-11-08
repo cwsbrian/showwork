@@ -36,3 +36,18 @@
     .tk-kw { color:#c792ea; } .tk-str { color:#a5d98a; } .tk-com { color:#7f8b97; font-style:italic; } .tk-num, .tk-lit { color:#f5a86b; } .tk-fn { color:#79b8ff; } .tk-ty { color:#ffd479; } .tk-key, .tk-tag { color:#ff8b94; }
     footer { margin-top:28px; font-size:12px; color:var(--muted); } [hidden] { display:none!important; }
     @media(max-width:560px) { .file > summary { padding:13px 14px; } .file-why { grid-column:1 / 4; } .check { grid-template-columns:1fr; gap:8px; } .badge { justify-self:start; } h1 { letter-spacing:-1px; } }
+    .r-zoom { display:block; position:relative; width:100%; padding:0; border:0; background:none; cursor:zoom-in; font:inherit; color:inherit; text-align:left; }
+    .r-zoom:focus-visible { outline:3px solid #65cdb7; outline-offset:-3px; }
+    .r-zoom-hint { position:absolute; right:12px; bottom:12px; padding:3px 10px; border-radius:999px; background:#172f34cc; color:#fff; font-size:12px; font-weight:650; opacity:0; transition:opacity .15s; pointer-events:none; }
+    .r-zoom:hover .r-zoom-hint, .r-zoom:focus-visible .r-zoom-hint { opacity:1; }
+    .r-zoom-wrap { position:relative; } .r-zoom-corner { position:absolute; top:10px; right:10px; width:32px; height:32px; border:0; border-radius:8px; background:#172f34cc; color:#fff; font-size:17px; line-height:1; cursor:zoom-in; }
+    .r-zoom-corner:hover, .r-zoom-corner:focus-visible { background:#172f34; outline:0; box-shadow:0 0 0 3px #65cdb7; }
+    .r-lightbox { position:fixed; inset:0; z-index:1000; display:flex; flex-direction:column; background:#0b1719f5; color:#fff; }
+    .r-lightbox-bar { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+    .r-lightbox-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:650; }
+    .r-lightbox-bar button { border:1px solid #ffffff40; background:#ffffff14; color:#fff; border-radius:8px; padding:4px 12px; font:inherit; font-size:14px; cursor:pointer; }
+    .r-lightbox-bar button:hover, .r-lightbox-bar button:focus-visible { background:#ffffff2e; outline:0; }
+    .r-lightbox-close { font-size:20px !important; line-height:1; padding:2px 11px 5px !important; }
+    .r-lightbox-stage { flex:1; min-height:0; overflow:auto; display:flex; padding:0 16px 16px; cursor:zoom-out; }
+    .r-lightbox-stage img { margin:auto; max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; background:#fff; border-radius:6px; box-shadow:0 10px 40px #0008; }
+    .r-lightbox.actual .r-lightbox-stage img { max-width:none; max-height:none; cursor:zoom-out; }
