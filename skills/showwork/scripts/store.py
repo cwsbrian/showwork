@@ -167,8 +167,9 @@ def cleanup_sessions(project_id, run_id=None):
     """Attempt every owner's cleanup even if another owner fails."""
     import browser
     import ios_simulator
+    import android_emulator
     errors = []
-    for owner in (browser, ios_simulator):
+    for owner in (browser, ios_simulator, android_emulator):
         if run_id:
             try: owner.close_run(project_id, run_id)
             except Exception as error: errors.append(error)

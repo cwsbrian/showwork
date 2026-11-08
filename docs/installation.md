@@ -125,3 +125,16 @@ Run `tests/browser_companion.cjs` in a development environment with Playwright a
 On macOS, install Xcode's Simulator tools and the `idb` CLI with `idb_companion`. The installation must support `describe`, MJPEG `video-stream`, and `ui tap`, `ui swipe`, `ui text`, and `ui button HOME`. Boot the chosen Simulator yourself by explicit UDID, start a Showwork task, then attach with `companion.py simulator open --project PROJECT --udid UDID [--title TITLE]`. Detach with `companion.py simulator close --project PROJECT --session SESSION`. Showwork keeps Simulator.app closed and leaves the device boot state alone when an attachment ends.
 
 The iOS tab supports tap and swipe directly on the device image; it has no separate control bar. Use device tools such as `idb` for text and Home. Split previews accept no device input. Report screenshots still come from the agent's device capture tool and belong in `/tmp` with capture provenance. See the [companion guide](../skills/showwork/references/companion.md#live-ios-simulator-sessions-macos).
+
+### Live Android Emulator sessions (macOS)
+
+Install Python 3.11+ and Android SDK Platform Tools (`adb`) on the Showwork host. Boot an emulator with your normal Android tools first; Showwork attaches only to an already booted emulator. Select its explicit `emulator-<digits>` serial from `adb devices -l` (for example `emulator-5554`), then start a Showwork task and attach:
+
+```sh
+python3 /absolute/skill/showwork/scripts/companion.py emulator open --project /absolute/project --serial emulator-5554 --title "Android preview"
+python3 /absolute/skill/showwork/scripts/companion.py emulator close --project /absolute/project --session SESSION-ID
+```
+
+The Android tab is an image-only screen: tap or drag to swipe, with coordinates updated when the frame rotates. Split previews are view-only. Use agent-side `adb` for text, Home, and app setup. Showwork captures at most four PNG frames per second and keeps only the newest preview in memory. Closing an attachment, stopping, or publishing ends the relay and leaves the emulator running. Physical devices are not supported.
+
+Capture report evidence separately with `adb -s SERIAL exec-out screencap -p > /tmp/android-evidence.png` or an existing Maestro flow. Inspect the image and record the emulator, Android version, app build, actions, and capture method; a streamed preview is not report evidence.

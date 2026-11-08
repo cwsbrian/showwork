@@ -213,6 +213,8 @@ struct RawMeta {
 pub enum SessionTransport {
     #[serde(rename = "browser")]
     Browser { url: String, port: u16, ws: String },
+    #[serde(rename = "android-emulator")]
+    AndroidEmulator { serial: String, port: u16, token: String },
     #[serde(rename = "ios-simulator")]
     IosSimulator {
         udid: String,
@@ -250,6 +252,13 @@ impl RawSession {
                 || *points_height == 0 || *port == 0
             {
                 return Err("Invalid iOS simulator transport fields".into());
+            }
+        }
+        if let SessionTransport::AndroidEmulator { serial, port, token } = &raw.transport {
+            let valid_serial = serial.strip_prefix("emulator-")
+                .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()));
+            if !valid_serial || *port == 0 || token.trim().is_empty() || raw.width == 0 || raw.height == 0 {
+                return Err("Invalid Android emulator transport fields".into());
             }
         }
         Ok(raw)
@@ -729,6 +738,79 @@ mod tests {
         let dir = s.root.join("projects/p1/sessions");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join(format!("{}.json", record["id"].as_str().unwrap())), record.to_string()).unwrap();
+    }
+
+    fn android_record() -> serde_json::Value {
+        json!({"id":"android1","project_id":"p1","run":"r1","kind":"android-emulator",
+            "title":"Android","width":1080,"height":2400,"pid":std::process::id(),
+            "started_at":"now","ended_at":null,"serial":"emulator-5554",
+            "port":1234,"token":"secret"})
+    }
+
+    #[test]
+    fn android_sessions_have_exact_frontend_json_and_watcher_snapshot() {
+        let (_d, s) = store();
+        write_session_record(&s, &android_record());
+        let sessions = s.list_sessions("p1", "r1").unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(serde_json::to_value(&sessions[0]).unwrap(), json!({
+            "id":"android1","projectId":"p1","run":"r1","kind":"android-emulator",
+            "title":"Android","width":1080,"height":2400,"pid":std::process::id(),
+            "startedAt":"now","endedAt":null,"alive":true,"serial":"emulator-5554",
+            "port":1234,"token":"secret"}));
+        assert_eq!(s.list_all_sessions("p1").unwrap().len(), 1);
+        assert_eq!(s.all_sessions(), BTreeSet::from([("p1".into(), "android1".into(), None)]));
+        assert!(s.list_sessions("p1", "other").unwrap().is_empty());
+    }
+
+    #[test]
+    fn malformed_android_records_are_skipped_by_every_listing() {
+        let (_d, s) = store();
+        let mut invalid = Vec::new();
+        for field in ["serial", "port", "token", "width", "height"] {
+            let mut record = android_record();
+            record.as_object_mut().unwrap().remove(field);
+            invalid.push(record);
+        }
+        for serial in ["", "emulator-", "emulator-abc", "emulator-5554x", " emulator-5554", "device-5554", "emulator-５５５４"] {
+            let mut record = android_record();
+            record["serial"] = json!(serial);
+            invalid.push(record);
+        }
+        for (field, value) in [("port", json!(0)), ("port", json!(65536)),
+            ("token", json!("")), ("token", json!("  ")), ("token", json!(0)),
+            ("width", json!(0)), ("height", json!(0))] {
+            let mut record = android_record();
+            record[field] = value;
+            invalid.push(record);
+        }
+        for record in invalid {
+            write_session_record(&s, &record);
+            assert!(s.list_sessions("p1", "r1").unwrap().is_empty());
+            assert!(s.list_all_sessions("p1").unwrap().is_empty());
+            assert!(s.all_sessions().is_empty());
+        }
+    }
+
+    #[test]
+    fn android_deletion_protects_live_relay_and_allows_ended_or_dead_relay() {
+        let (_d, s) = store();
+        let mut record = android_record();
+        write_session_record(&s, &record);
+        assert_eq!(s.delete_session("p1", "android1"), Err(StoreError::Busy));
+        assert_eq!(s.delete_project("p1"), Err(StoreError::Busy));
+        record["ended_at"] = json!("done");
+        write_session_record(&s, &record);
+        assert!(!s.list_all_sessions("p1").unwrap()[0].alive);
+        s.delete_session("p1", "android1").unwrap();
+        record["ended_at"] = serde_json::Value::Null;
+        let mut exited = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+        record["pid"] = json!(exited.id());
+        exited.wait().unwrap();
+        write_session_record(&s, &record);
+        assert!(!s.list_all_sessions("p1").unwrap()[0].alive);
+        s.delete_session("p1", "android1").unwrap();
+        assert!(s.list_all_sessions("p1").unwrap().is_empty());
     }
 
     #[test]

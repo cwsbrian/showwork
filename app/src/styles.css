@@ -145,4 +145,4 @@ button { font: inherit; cursor: pointer; }
 }
 .switcher-trigger .avatar { box-shadow: 0 0 0 2px rgba(255, 255, 255, .12); }
 .switcher-trigger .others-unread { background: #fff !important; color: #116e60 !important; }
-.ios-screen .session-frame { touch-action: none; }
+.device-screen .session-frame { touch-action: none; }

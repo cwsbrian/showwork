@@ -4,6 +4,7 @@ export type TabContext = { key: string; running: boolean; stopped?: boolean } | 
 
 export function sessionLabel(s: SessionItem): string {
   if (s.title) return s.title;
+  if (s.kind === 'android-emulator') return 'Android Emulator';
   if (s.kind === 'ios-simulator') return 'iOS Simulator';
   try { return new URL(s.url).host || s.url; } catch { return s.url; }
 }

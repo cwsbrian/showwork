@@ -23,6 +23,7 @@ from runtime import workspace
 import store
 import browser
 import ios_simulator
+import android_emulator
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 TEMPLATE = ASSETS / "companion.html"
@@ -374,6 +375,16 @@ def main():
             command.add_argument("--title")
         else:
             command.add_argument("--session", required=True)
+    emulator_cmd = sub.add_parser("emulator")
+    emulator_sub = emulator_cmd.add_subparsers(dest="emulator_action", required=True)
+    for action in ("open", "close"):
+        command = emulator_sub.add_parser(action)
+        command.add_argument("--project", required=True, type=Path)
+        if action == "open":
+            command.add_argument("--serial", required=True)
+            command.add_argument("--title")
+        else:
+            command.add_argument("--session", required=True)
     args = cli.parse_args()
     try:
         if not args.project.is_dir():
@@ -394,6 +405,13 @@ def main():
             run_id = store.finish_run(identity["id"], store.worktree_key(args.project), args.type)
             store.cleanup_sessions(identity["id"], run_id)
             print(json.dumps({"stopped": args.type}))
+        elif args.action == "emulator":
+            if args.emulator_action == "open":
+                session = android_emulator.open_emulator(args.project, args.serial, args.title)
+                print(json.dumps({"session": session["id"], "run": session["run"], "endpoint": f"http://127.0.0.1:{session['port']}"}))
+            else:
+                android_emulator.close_emulator(store.project_identity(args.project)["id"], args.session)
+                print(json.dumps({"closed": args.session}))
         elif args.action == "simulator":
             if args.simulator_action == "open":
                 session = ios_simulator.open_simulator(args.project, args.udid, args.title)

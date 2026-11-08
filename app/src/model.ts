@@ -42,7 +42,12 @@ export interface IosSession extends SessionCommon {
   pointsHeight: number;
   token: string;
 }
-export type SessionItem = BrowserSession | IosSession;
+export interface AndroidSession extends SessionCommon {
+  kind: 'android-emulator';
+  serial: string;
+  token: string;
+}
+export type SessionItem = BrowserSession | IosSession | AndroidSession;
 
 /** A report an agent has started but not published yet. */
 export interface RunningItem {

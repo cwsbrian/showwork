@@ -145,6 +145,18 @@ async function waitServer() {
   assert.equal(await page.locator('.split-tile').nth(1).locator('.split-label').textContent(), 'localhost:3000');
   await page.locator('.split-tile').first().click();
   assert.equal(await page.locator('.tab[aria-selected="true"] span').first().textContent(), 'Login page');
+  // The main app routes Android to its image-only device view, including mixed Split.
+  await page.evaluate(s => window.__showworkMock.addSession(s), {...session('s3', null), kind:'android-emulator', serial:'emulator-5554', token:'test', alive:false});
+  await page.locator('.tab', {hasText:'Android Emulator · ended'}).click();
+  await page.locator('.android-screen').waitFor();
+  assert.equal(await page.locator('.android-screen .session-toolbar').count(),0);
+  await page.evaluate(s => window.__showworkMock.addSession(s), {...session('s4', null), kind:'ios-simulator', udid:'test', pointsWidth:400, pointsHeight:800, token:'test', alive:false});
+  await page.getByRole('tab',{name:'Split',exact:true}).click();
+  assert.equal(await page.locator('.split-tile').count(),4);
+  assert.equal(await page.locator('.split-preview .android-screen').count(),1);
+  assert.equal(await page.locator('.split-preview .ios-screen').count(),1);
+  await page.getByRole('button',{name:'Close Android Emulator',exact:true}).click();
+  await page.getByRole('button',{name:'Close iOS Simulator',exact:true}).click();
   await page.evaluate(() => window.__showworkMock.endSession('s1'));
   await page.locator('.tab', {hasText: 'Login page · ended'}).waitFor();
   await page.getByRole('button', {name: 'Close Login page'}).click();

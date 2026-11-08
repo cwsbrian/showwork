@@ -35,6 +35,22 @@ class StoreTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_cleanup_continues_after_ios_and_android_failures(self):
+        import browser, ios_simulator, android_emulator
+        with patch.object(browser, 'close_run') as browser_run, \
+             patch.object(browser, 'close_orphans') as browser_orphans, \
+             patch.object(ios_simulator, 'close_run', side_effect=ValueError('ios failed')), \
+             patch.object(ios_simulator, 'close_orphans') as ios_orphans, \
+             patch.object(android_emulator, 'close_run', side_effect=ValueError('android failed')) as android_run, \
+             patch.object(android_emulator, 'close_orphans') as android_orphans:
+            with self.assertRaisesRegex(ValueError, 'ios failed; android failed'):
+                STORE.cleanup_sessions('project', 'run')
+            browser_run.assert_called_once_with('project', 'run')
+            browser_orphans.assert_called_once_with('project')
+            ios_orphans.assert_called_once_with('project')
+            android_run.assert_called_once_with('project', 'run')
+            android_orphans.assert_called_once_with('project')
+
     def test_each_start_gets_a_new_run_and_replaces_the_same_kind(self):
         repo = self.repo()
         a = STORE.start_run(repo, "review", "claude")

@@ -410,16 +410,39 @@ class CompanionTest(unittest.TestCase):
 
 
 class SimulatorCleanupTests(unittest.TestCase):
-    def test_cleanup_attempts_both_owners_after_browser_failure(self):
+    def test_cleanup_attempts_all_owners_after_browser_failure(self):
         with patch.object(COMPANION.browser, 'close_run', side_effect=ValueError('browser failed')), \
              patch.object(COMPANION.browser, 'close_orphans') as browser_orphans, \
              patch.object(COMPANION.ios_simulator, 'close_run') as ios_run, \
-             patch.object(COMPANION.ios_simulator, 'close_orphans') as ios_orphans:
+             patch.object(COMPANION.ios_simulator, 'close_orphans') as ios_orphans, \
+             patch.object(COMPANION.android_emulator, 'close_run') as android_run, \
+             patch.object(COMPANION.android_emulator, 'close_orphans') as android_orphans:
             with self.assertRaisesRegex(ValueError, 'browser failed'):
                 COMPANION.store.cleanup_sessions('project', 'run')
             browser_orphans.assert_called_once_with('project')
             ios_run.assert_called_once_with('project', 'run')
             ios_orphans.assert_called_once_with('project')
+            android_run.assert_called_once_with('project', 'run')
+            android_orphans.assert_called_once_with('project')
+
+    def test_emulator_cli_open_and_close(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        session = {'id':'session', 'run':'run', 'port':12345}
+        with tempfile.TemporaryDirectory() as project:
+            for action, extra, expected in (
+                ('open', ['--serial','emulator-5554','--title','Phone'], {'session':'session','run':'run','endpoint':'http://127.0.0.1:12345'}),
+                ('close', ['--session','session'], {'closed':'session'}),
+            ):
+                output = StringIO()
+                with patch.object(sys, 'argv', ['companion.py','emulator',action,'--project',project,*extra]), \
+                     patch.object(COMPANION.android_emulator, 'open_emulator', return_value=session) as opened, \
+                     patch.object(COMPANION.android_emulator, 'close_emulator') as closed, \
+                     patch.object(COMPANION.store, 'project_identity', return_value={'id':'project'}), redirect_stdout(output):
+                    self.assertEqual(COMPANION.main(), 0)
+                    self.assertEqual(json.loads(output.getvalue()), expected)
+                    if action == 'open': opened.assert_called_once_with(Path(project), 'emulator-5554', 'Phone')
+                    else: closed.assert_called_once_with('project', 'session')
 
     def test_stop_completes_run_before_scanning_both_session_owners(self):
         from contextlib import redirect_stdout

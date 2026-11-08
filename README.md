@@ -151,3 +151,16 @@ scripts/cli.cjs              npx installer entry point
 scripts/showwork.py          Optional evidence recorder
 tests/                      Installer and evidence regression tests
 ```
+
+### Live Android Emulator sessions (macOS)
+
+Install Python 3.11+ and Android SDK Platform Tools (`adb`) on the Showwork host. Boot an emulator with your normal Android tools first; Showwork attaches only to an already booted emulator. Select its explicit `emulator-<digits>` serial from `adb devices -l` (for example `emulator-5554`), then start a Showwork task and attach:
+
+```sh
+python3 /absolute/skill/showwork/scripts/companion.py emulator open --project /absolute/project --serial emulator-5554 --title "Android preview"
+python3 /absolute/skill/showwork/scripts/companion.py emulator close --project /absolute/project --session SESSION-ID
+```
+
+The Android tab is an image-only screen: tap or drag to swipe, with coordinates updated when the frame rotates. Split previews are view-only. Use agent-side `adb` for text, Home, and app setup. Showwork captures at most four PNG frames per second and keeps only the newest preview in memory. Closing an attachment, stopping, or publishing ends the relay and leaves the emulator running. Physical devices are not supported.
+
+Capture report evidence separately with `adb -s SERIAL exec-out screencap -p > /tmp/android-evidence.png` or an existing Maestro flow. Inspect the image and record the emulator, Android version, app build, actions, and capture method; a streamed preview is not report evidence.

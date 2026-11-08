@@ -6,6 +6,7 @@ import { createMiddle } from './views/middle';
 import { createReportPane } from './views/reportPane';
 import { createTabs } from './views/tabs';
 import { createScreen } from './views/sessionView';
+import { createAndroidScreen } from './views/androidSessionView';
 import { createIosScreen } from './views/iosSessionView';
 import { sessionLabel } from './views/tabs';
 
@@ -47,7 +48,7 @@ const pane = createReportPane($('report'), api, (id) => {
 });
 const tabs = createTabs($('tabs'), {
   reportHost: $('report'),
-  screen: (s, interactive) => s.kind === 'ios-simulator' ? createIosScreen(s, interactive) : createScreen(s, interactive),
+  screen: (s, interactive) => s.kind === 'android-emulator' ? createAndroidScreen(s, interactive) : s.kind === 'ios-simulator' ? createIosScreen(s, interactive) : createScreen(s, interactive),
   closeSession: (id) => run('Could not close the session', async () => {
     if (!projectId) return;
     await api.deleteSession(projectId, id);

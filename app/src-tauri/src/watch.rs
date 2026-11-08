@@ -166,6 +166,29 @@ mod tests {
     }
 
     #[test]
+    fn android_sessions_fire_when_created_and_ended() {
+        let (_tmp, store, reports) = setup();
+        let sessions = reports.parent().unwrap().join("sessions");
+        fs::create_dir_all(&sessions).unwrap();
+        let (tx, rx) = mpsc::channel();
+        let _watcher = start(store, |_, _| {}, move || { let _ = tx.send(()); }).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        let mut record = json!({"id":"android1","project_id":"p1","run":"r1","kind":"android-emulator",
+            "title":"Phone","width":600,"height":1200,"pid":std::process::id(),
+            "started_at":"now","ended_at":null,"serial":"emulator-5554",
+            "port":1234,"token":"secret"});
+        let path = sessions.join("android1.json");
+        fs::write(&path, record.to_string()).unwrap();
+        rx.recv_timeout(Duration::from_secs(3)).expect("Android session appears");
+        while rx.recv_timeout(Duration::from_millis(500)).is_ok() {}
+        record["ended_at"] = json!("later");
+        let pending = sessions.join(".pending-android1");
+        fs::write(&pending, record.to_string()).unwrap();
+        fs::rename(&pending, &path).unwrap();
+        rx.recv_timeout(Duration::from_secs(3)).expect("Android session ends");
+    }
+
+    #[test]
     fn pending_folder_alone_does_not_fire() {
         let (_tmp, store, reports) = setup();
         let (_watcher, rx) = channel_watcher(store);

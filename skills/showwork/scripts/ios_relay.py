@@ -1,14 +1,12 @@
 """Loopback-only, authenticated iOS Simulator frame and input relay."""
 import argparse
-import hmac
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
 import os
 import signal
 import subprocess
 import threading
-from urllib.parse import parse_qs, urlsplit
+from device_relay import make_server
 
 MAX_FRAME = 8 * 1024 * 1024
 
@@ -65,6 +63,17 @@ def jpeg_dimensions(jpeg: bytes) -> tuple[int, int]:
 
 
 class RelayState:
+    content_type = 'image/jpeg'
+    width_header = 'X-Points-Width'
+    height_header = 'X-Points-Height'
+
+    def frame_dimensions(self) -> tuple[int, int]:
+        return self.points_width, self.points_height
+
+    def health_payload(self) -> dict:
+        return {'ready': self.frame is not None and self.reason is None,
+                'points_width': self.points_width, 'points_height': self.points_height}
+
     def __init__(self, udid: str, token: str, origins: set[str], points_width: int, points_height: int, idb_path: str):
         if not token or min(points_width, points_height) <= 0:
             raise ValueError('Token and positive point dimensions required')
@@ -118,72 +127,6 @@ class RelayState:
             except (OSError, subprocess.SubprocessError):
                 self.finish('Input command failed')
                 raise RuntimeError('Input command failed') from None
-
-
-def make_server(state: RelayState) -> ThreadingHTTPServer:
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args): pass
-
-        def respond(self, status, body=b'', content_type='application/json', headers=None):
-            self.send_response(status)
-            origin = self.headers.get('Origin')
-            if origin in state.origins:
-                self.send_header('Access-Control-Allow-Origin', origin)
-                self.send_header('Vary', 'Origin')
-                self.send_header('Access-Control-Expose-Headers', 'X-Frame-Seq, X-Points-Width, X-Points-Height')
-            self.send_header('Content-Type', content_type)
-            self.send_header('Content-Length', str(len(body)))
-            self.send_header('Cache-Control', 'no-store')
-            for k, v in (headers or {}).items(): self.send_header(k, str(v))
-            self.end_headers()
-            if body: self.wfile.write(body)
-
-        def authorized(self):
-            if self.headers.get('Origin') not in state.origins or not hmac.compare_digest(self.headers.get('X-Session-Token', '').encode(), state.token.encode()):
-                self.respond(403)
-                return False
-            return True
-
-        def do_OPTIONS(self):
-            requested = {h.strip().lower() for h in self.headers.get('Access-Control-Request-Headers', '').split(',') if h.strip()}
-            if self.headers.get('Origin') not in state.origins or not requested <= {'x-session-token', 'content-type'} or self.headers.get('Access-Control-Request-Method', 'GET') not in ('GET', 'POST'):
-                return self.respond(403)
-            self.respond(204, headers={'Access-Control-Allow-Headers':'X-Session-Token, Content-Type', 'Access-Control-Allow-Methods':'GET, POST, OPTIONS'})
-
-        def do_GET(self):
-            if not self.authorized(): return
-            url = urlsplit(self.path)
-            if url.path == '/health':
-                with state.condition:
-                    payload = {'ready': state.frame is not None and state.reason is None, 'points_width':state.points_width, 'points_height':state.points_height}
-                return self.respond(200, json.dumps(payload).encode())
-            if url.path != '/frame': return self.respond(404)
-            try:
-                after = int(parse_qs(url.query).get('after', ['0'])[0])
-                if after < 0: raise ValueError()
-            except ValueError: return self.respond(400)
-            with state.condition:
-                state.condition.wait_for(lambda: state.reason is not None or state.seq > after, timeout=2)
-                if state.reason is not None: return self.respond(410)
-                if state.seq <= after: return self.respond(204)
-                frame = state.frame
-                headers = {'X-Frame-Seq':state.seq, 'X-Points-Width':state.points_width, 'X-Points-Height':state.points_height}
-            self.respond(200, frame, 'image/jpeg', headers)
-
-        def do_POST(self):
-            if not self.authorized(): return
-            if self.path != '/input': return self.respond(404)
-            try:
-                size = int(self.headers.get('Content-Length', '0'))
-                if not 0 < size <= 4096 or self.headers.get('Transfer-Encoding'): raise ValueError()
-                self.connection.settimeout(5)
-                body = self.rfile.read(size)
-                if len(body) != size: raise ValueError()
-                state.run_input(json.loads(body))
-            except (ValueError, UnicodeError): return self.respond(400)
-            except (RuntimeError, OSError): return self.respond(503)
-            self.respond(200, b'{"ok":true}')
-    return ThreadingHTTPServer(('127.0.0.1', 0), Handler)
 
 
 def stop_child(child):
