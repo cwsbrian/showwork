@@ -42,14 +42,14 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   await page.getByRole('radio',{name:'Compact list'}).focus();await page.keyboard.press('ArrowRight');
   assert.equal(await page.getByRole('radio',{name:'Status board'}).getAttribute('aria-checked'),'true');
   await page.getByRole('button',{name:'Choose this option'}).click();
-  await page.getByText('Choice saved. You can continue in chat.').waitFor();
+  await page.getByText('This report has no linked agent session.').waitFor();
   // A failed poll and then a successful one must keep the saved state, so the same choice is not sent again.
   let posts=0;page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname==='/api/choice')posts++;});
   await page.route('**/api/view',route=>route.abort());
   await page.getByText('Disconnected · Last page').waitFor();
   await page.unroute('**/api/view');
   await page.getByText('● Connected').waitFor();
-  assert.equal(await page.locator('#selection-status').textContent(),'Choice saved. You can continue in chat.','Saved state survives a reconnect');
+  assert.equal(await page.locator('#selection-status').textContent(),'This report has no linked agent session.','Saved state survives a reconnect');
   assert.ok(await page.getByRole('button',{name:'Choose this option'}).isDisabled(),'No second submit after a reconnect');
   await page.evaluate(()=>document.getElementById('submit').click());await new Promise(r=>setTimeout(r,200));
   assert.equal(posts,0,'The saved choice is not posted twice');
@@ -84,15 +84,15 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   await page.route('**/api/choice',async route=>{sent.push(JSON.parse(route.request().postData()).choice);if(sent.length===1)await held;await route.continue();});
   await page.getByRole('radio',{name:'Compact list'}).click();
   await page.getByRole('button',{name:'Choose this option'}).click();
-  await page.locator('#selection-status',{hasText:'Saving…'}).waitFor();
+  await page.locator('#selection-status',{hasText:'Sending…'}).waitFor();
   await page.getByRole('radio',{name:'Status board'}).click();
-  assert.equal(await page.locator('#selection-status').textContent(),'Saving…','Still saving after switching options');
+  assert.equal(await page.locator('#selection-status').textContent(),'Sending…','Still sending after switching options');
   assert.ok(await page.getByRole('button',{name:'Choose this option'}).isDisabled(),'No second send while one is in flight');
   release();
   await page.getByText('Saved: Compact list. Press the button to change it to Status board.').waitFor();
   assert.deepEqual(sent,['list'],'Only the first choice was sent');
   await page.getByRole('button',{name:'Choose this option'}).click();
-  await page.getByText('Choice saved. You can continue in chat.').waitFor();
+  await page.getByText('This report has no linked agent session.').waitFor();
   assert.deepEqual(sent,['list','board'],'The second choice is sent after the first lands');
   await page.unroute('**/api/choice');
   const handoff={mode:'handoff',title:'Review what changed',summary:'Choices show comparisons; finished work shows results and evidence.',sections:[{kind:'explanation',title:'From request to result',body:'Proceed with clear tasks. Show alternatives only when a choice is needed.',html:'<div style="display:grid;gap:12px"><div style="background:#eef4f1;padding:16px;border-radius:10px">Request → visual choice when needed</div><div style="text-align:center">↓</div><div style="background:#e9eff8;padding:16px;border-radius:10px">Implementation · verification → result</div></div>'}],checks:[{status:'verified',text:'Keyboard selection and saved choice',evidence:'Selected with arrow keys in Chromium, submitted, and confirmed the board event.'},{status:'unverified',text:'Visual quality of a real user app',evidence:'This checks the companion feature; no separate app was evaluated.'}]};

@@ -7,10 +7,12 @@ import { createReportPane } from './views/reportPane';
 import { createTabs } from './views/tabs';
 import { createScreen } from './views/sessionView';
 import { createIosScreen } from './views/iosSessionView';
+import { createUpdates } from './views/updates';
 import { sessionLabel } from './views/tabs';
 
 const api = createApi();
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
+createUpdates($('updates'), api);
 
 // Selection lives only here. Views receive it and report changes.
 let projectId: string | null = null;
@@ -103,6 +105,9 @@ async function refreshSessions(onlyIfChanged = false) {
 }
 
 setInterval(() => {
+  if (!projectId) {
+    void ensureFirstProject().catch((e) => showError('Could not refresh projects', e));
+  }
   if (projectId && sessions.some((s) => s.alive)) {
     void refreshSessions(true).catch((e) => showError('Could not refresh sessions', e));
   }
@@ -110,6 +115,11 @@ setInterval(() => {
 async function refreshProjects() {
   projects = await api.listProjects();
   drawProjects();
+}
+async function ensureFirstProject() {
+  if (projectId) return;
+  await refreshProjects();
+  if (!projectId && projects.length) await selectProject(projects[0].id);
 }
 async function refreshReports() {
   const pid = projectId;
@@ -119,6 +129,11 @@ async function refreshReports() {
     if (mine !== listToken) return;
     reports = list;
     running = working;
+    if (!reportId && !runId && working.length) runId = working[0].id;
+    if (runId) {
+      const selected = working.find((r) => r.id === runId);
+      if (selected) pane.showDraft(selected);
+    }
     const activeRuns = new Set(working.map((r) => r.id));
     const reportedRuns = new Set(list.map((r) => r.run).filter(Boolean));
     const groups = new Map<string, SessionItem[]>();
@@ -140,6 +155,8 @@ async function refreshReports() {
         void selectReport(published.id).catch((e) => showError('Could not open the report', e));
       } else if (!stopped.some((r) => r.id === runId)) {
         runId = null;
+        pane.clear();
+      } else {
         pane.clear();
       }
     }
@@ -176,6 +193,8 @@ async function selectRun(id: string) {
   runId = id;
   reportId = null;
   pane.clear();
+  const selected = running.find((r) => r.id === id);
+  if (selected) pane.showDraft(selected);
   sessions = [];
   drawMiddle();
   drawTabs();
@@ -249,17 +268,19 @@ async function openReport(p: ReportRef) {
   if (projectId === p.projectId && reportId === p.reportId) await selectReport(p.reportId);
 }
 
-// Arrivals only refresh lists and badges; they never touch the selection or the right pane.
+// Arrivals keep an existing selection. An empty app opens its first project when it appears.
 api.onArrival(() =>
   run('Could not refresh the reports', async () => {
     await refreshProjects();
     if (projectId) await refreshReports();
+    else if (projects.length) await selectProject(projects[0].id);
   }),
 );
 api.onRunningChanged(() =>
   run('Could not refresh the reports', async () => {
     await refreshProjects();
     if (projectId) await refreshReports();
+    else if (projects.length) await selectProject(projects[0].id);
   }),
 );
 api.onOpenReport((p) => run('Could not open the report', () => openReport(p)));

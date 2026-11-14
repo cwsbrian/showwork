@@ -1,13 +1,13 @@
-# Browser companion: decide when needed, explain when done
+# Showwork companion: decide when needed, explain when done
 
 Use this companion only within an explicitly invoked Showwork task. Do not open it automatically for ordinary coding work. The main purpose is explaining the finished result; do not recount the agent's process.
 
 Two supported modes:
 
 - **Decision:** you need a human visual choice. Render real alternatives before asking. Do not open a design-approval loop for a clear, simple task or an already decided choice.
-- **Handoff:** after implementation and verification, explain the result with relevant visuals and evidence in the browser. No approval is requested. Keep a brief outcome summary in chat as well.
+- **Handoff:** after implementation and verification, explain the result with relevant visuals and evidence in the app. No approval is requested. Keep a brief outcome summary in chat as well.
 
-The companion uses Python 3.11+ with no third-party runtime dependencies. It works both in the plugin bundle and a copied Codex skill: resolve `../scripts/companion.py` relative to this guide (inside the `showwork` skill). Always pass the target project's absolute path with `--project`.
+The companion uses Python 3.11+ with no third-party runtime dependencies. It works both in the plugin bundle and a copied Codex skill: resolve `../scripts/companion.py` relative to this guide (inside the `showwork` skill). Always pass the target project's absolute path with `--project`. For an explicit Showwork command, pass `--require-app` to `start`, `browser open`, `simulator open`, and `publish`. If the app is unavailable, say so and leave the app presentation or runtime check unverified; do not move it into another browser or a separate Simulator window.
 
 ## Show that work started
 
@@ -15,20 +15,34 @@ As the first step of every Showwork command, before investigating, run:
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/companion.py start \
-  --project /absolute/project --type <result|plan|review|verify|adversarial-review> --agent <claude|codex>
+  --project /absolute/project --type <result|plan|review|verify> --agent <claude|codex> --require-app
 ```
 
 It prints JSON with `directory` (the same temporary directory `path` returns), `run` and `app`. The Showwork app then lists the task as in progress with a spinner. Use the same `--type` you will publish with: `publish` replaces that working item with the report. Add `--title "short title"` only when you already know it. Running `start` again for the same type and worktree replaces the item rather than adding one. If you stop without publishing (the user cancels, or the task cannot produce a report), run `companion.py stop --project /absolute/project --type <type>`; an item that is never finished disappears from the app after three hours.
+
+Write the report into one live document as its text becomes ready. Append short text chunks in order, including paragraph breaks:
+
+```bash
+python3 /absolute/path/to/showwork/scripts/companion.py progress \
+  --project /absolute/project --type <result|plan|review|verify> \
+  --text 'What changed
+
+Short, confirmed explanation.
+
+'
+```
+
+The app types each new chunk into the selected task's Report tab. Send actual report wording in the user's language throughout the work, a sentence or short paragraph at a time, so the document grows while they watch. Use real newline characters for paragraph breaks as shown. Do not send status messages or present a proposed check as completed. The final `publish` still validates and saves the complete report and replaces the draft. Progress is optional for a very short task or before there is anything reliable to show.
 
 ## Capture web pages in the app
 
 After `companion.py start`, open each browser the task needs with:
 
 ```bash
-python3 /absolute/skill/showwork/scripts/companion.py browser open --project /absolute/project --url http://localhost:3000 --title "Login page"
+python3 /absolute/skill/showwork/scripts/companion.py browser open --project /absolute/project --url http://localhost:3000 --title "Login page" --require-app
 ```
 
-The command prints a `cdp` address and a session id. Open another session for each page or role that must be visible at the same time. Connect Playwright with `chromium.connectOverCDP(cdp)` and use `browser.contexts()[0].pages()[0]` to operate the page and save screenshots into the temporary directory returned by `companion.py path`. The Showwork app shows that browser in the selected task's tabs. Use this browser for web captures; keep the user's own browser and desktop free of capture windows. Close an unneeded session with `companion.py browser close --project /absolute/project --session <id>`. Publishing the task or running `stop` closes its remaining browsers. Attach an already-booted iOS Simulator with `simulator open` (see Live iOS Simulator sessions below).
+The command prints a `cdp` address and a session id. Confirm its tab appears in Showwork before treating it as an in-app check. Open another session for each page or role that must be visible at the same time. Connect Playwright with `chromium.connectOverCDP(cdp)` and use `browser.contexts()[0].pages()[0]` to operate that same page and save screenshots into the temporary directory returned by `companion.py path`. Use this browser for web captures; keep the user's own browser and desktop free of capture windows. Do not launch a separate Playwright browser or browser tool for the target flow. Close an unneeded session with `companion.py browser close --project /absolute/project --session <id>`. Publishing the task or running `stop` closes its remaining browsers. Attach an already-booted iOS Simulator with `simulator open` (see Live iOS Simulator sessions below).
 
 ## Explain simply, with detail available
 
@@ -42,9 +56,9 @@ Example rewrite (same facts): “Verified authenticated access to the original a
 
 ## Delegate presentation, retain evidence ownership
 
-The primary implementation/review agent owns scenario selection, browser or simulator operation, screenshot capture, and expected-versus-observed judgments. For mobile, follow the adversarial review's simulator/emulator evidence requirements. A presentation agent must not operate the application, collect replacement evidence, change findings/severity, or turn unverified checks into passes.
+The primary implementation/review agent owns scenario selection, browser or simulator operation, screenshot capture, and expected-versus-observed judgments. For iOS reviews, follow the [review mobile evidence guide](../../showwork-review/references/mobile.md). A presentation agent must not operate the application, collect replacement evidence, change findings/severity, or turn unverified checks into passes.
 
-For web captures, prefer Playwright when it is available: reach the relevant state, then save a page or element screenshot and record the viewport and interaction. For mobile captures, prefer an existing Maestro flow or installed Maestro CLI when it can drive the selected iOS Simulator or Android emulator and save `takeScreenshot` output. Use the project's existing workflow or available device tools when Maestro is unavailable. Inspect every saved image and keep capture provenance; a screenshot alone does not prove that an interaction worked.
+For web captures, use Playwright connected to the in-app session's CDP address when available: reach the relevant state, then save a page or element screenshot and record the viewport and interaction. For iOS captures, use the same Simulator attached in Showwork and save a real device screenshot with an existing Maestro flow, `idb`, or `simctl`. Inspect every saved image and keep capture provenance; a screenshot alone does not prove that an interaction worked. The current app has no Android mirror, so record that runtime gap without opening an external emulator for the Showwork check.
 
 Delegate report JSON and static HTML/SVG authoring to a lower-cost subagent when the runtime supports model selection. Prefer **Codex Luna** (`gpt-6-luna` only when exposed by the runtime) and **Claude Haiku** (`model: "haiku"` on the native Agent invocation). An explicit user preference, such as Terra or Sonnet, overrides this default; resolve the actual available model identifier rather than guessing an alias. Do not change the main model, global subagent defaults, or user configuration. If delegation/model selection is unavailable or fails, disclose that limitation and author the report with the current agent; never claim the preferred model ran. Do not silently escalate to a different paid model.
 
@@ -56,10 +70,9 @@ Model selection references: [Codex subagent configuration](https://learn.chatgpt
 
 ## Show the report
 
-Publish first (see **Publish a page**). The app is the default viewer; the browser is the fallback.
+Publish first (see **Publish a page**). An explicit Showwork command uses the app as its viewer.
 
-- If the publish output says `"app": "opened"`, tell the user the report is in the Showwork app. The app is the user's viewer; do not share a browser URL. You may still run `serve` yourself to check the rendered page and images before sharing (see below), then stop it.
-- If it says `"missing"` or `"disabled"`, start the browser fallback below and share the full URL.
+- Confirm the report and its images in Showwork before telling the user it is shown. The `--require-app` flag fails when the app is missing or disabled; report that limit instead of sharing a separate browser URL.
 
 First get the temporary directory for captures and one-off scripts (the command creates it outside the project):
 
@@ -69,7 +82,7 @@ SHOWWORK_VISUAL=$(python3 /absolute/path/to/showwork/scripts/companion.py path -
 
 Use this returned absolute path for report JSON sources, screenshots and disposable scripts. On POSIX it is `/tmp/showwork-<uid>/<project-path-hash>/visual`; on Windows it uses the OS temporary folder. Never create `.showwork/` or report artifacts in the project.
 
-Browser fallback, run through the environment's persistent shell/session mechanism:
+Manual legacy browser viewer, for workflows outside an explicitly invoked Showwork command:
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/companion.py serve --project /absolute/project
@@ -77,7 +90,7 @@ python3 /absolute/path/to/showwork/scripts/companion.py serve --project /absolut
 
 Here `showwork` means the **skill folder**, e.g. `<project>/.agents/skills/showwork`, not the plugin root. The server stays in the foreground; keep the tool session alive rather than detaching a process the host may reap. It prints JSON containing `url`, `pid`, `project`, and `directory`; connection info also lives at `server.json` inside the returned temporary directory. It shows the latest report from the same worktree and updates live. Check that the server responds before reusing old info. Restarting gives a new URL/key. Stop the owning terminal process with Ctrl-C when the walkthrough is no longer needed.
 
-Open the full `url` using an available browser-opening tool such as `open_in_codex`, and include that clickable URL in chat. In a local desktop environment, `serve --open` can open the system browser instead. Do not require another permission question to show a visual already needed for the authorized task. This server binds only to `127.0.0.1`; a remote user's browser may need the environment's existing port forwarding. Do not pretend a local URL is reachable from another machine.
+This manual viewer binds only to `127.0.0.1`; a remote user's browser may need the environment's existing port forwarding. Do not use it as a fallback for an invoked Showwork command.
 
 ## Publish a page
 
@@ -86,10 +99,10 @@ Author a JSON file, then run:
 ```bash
 python3 /absolute/skill/showwork/scripts/companion.py publish \
   --project /absolute/project --file "$SHOWWORK_VISUAL/handoff-source.json" \
-  --type result --agent claude
+  --type result --agent claude --require-app
 ```
 
-Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the command's `--type`: `result` (showwork), `plan`, `review`, `verify` or `adversarial-review`. A decision page uses the type of the command that raised it, for example `--type plan` while planning. It prints JSON with `published` (version), `mode`, `report` (the report id), `project`, `path` and `app` (`opened`, `missing` or `disabled`). Keep the `report` id for `events`. The app or an open browser updates automatically. Every publish creates a new report. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
+Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the command's `--type`: `result` (showwork), `plan`, `review`, or `verify`. A decision page uses the type of the command that raised it, for example `--type plan` while planning. It prints JSON with `published` (version), `mode`, `report` (the report id), `project`, `path` and `app` (`opened` with `--require-app`). Keep the `report` id for `events`. The app updates automatically. Every publish creates a new report. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
 
 ### Decision page
 
@@ -106,7 +119,7 @@ Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the comm
 }
 ```
 
-Use the user's language and faithfully represent each alternative. These are mockups, not proof of running behavior. The user chooses an option and submits it in the Showwork app, or in the browser fallback. Read current-version selections with:
+Use the user's language and faithfully represent each alternative. These are mockups, not proof of running behavior. The user chooses an option and submits it in the Showwork app. Read current-version selections with:
 
 ```bash
 python3 /absolute/skill/showwork/scripts/companion.py events --project /absolute/project --report <report id from publish>
@@ -114,7 +127,17 @@ python3 /absolute/skill/showwork/scripts/companion.py events --project /absolute
 
 It prints `{"report": id, "version", "open": bool, "events": [...]}`; when no report matches, `report` and `version` are `null` and `open` is `false`. Always pass `--report`; without it the latest decision report from the same worktree is used, and never another worktree's. The worktree is the git top-level folder (the project folder outside git), so a subfolder of the same checkout counts as the same worktree. A decision stays open until a newer report is published from the same worktree; it stays closed even if that newer report is later deleted.
 
-Do not busy-poll. Wait for the user to reply, or use a supported bounded wait while continuing independent work, then read the events. A saved click does not itself wake an idle agent; tell the user to continue in chat if necessary. Combine the latest submitted selection with the user's chat feedback; an explicit correction in chat takes precedence. Old versions' selections cannot decide new alternatives. The choice applies only to the displayed question, not permission to deploy or expand scope.
+Do not busy-poll. A submitted choice is recorded and, when the report is linked to an active original Orca session, sent there automatically with the question and option details. The app shows whether delivery succeeded; an unavailable session leaves the choice recorded. Use a supported bounded wait or read the events when continuing work. Combine the latest submitted selection with the user's chat feedback; an explicit correction in chat takes precedence. Old versions' selections cannot decide new alternatives. The choice applies only to the displayed question, not permission to deploy or expand scope.
+
+### Read comments on a plan
+
+In the desktop app, the reader can drag across a plan report's title, summary, section text, text inside a section's HTML visual, or code in a file accordion and add a comment to the selection. Code selections may span multiple syntax-highlighted lines; `anchor.target` identifies the file block and `anchor.quote` preserves the selected code. The highlighted text and comment remain when the report is reopened. Readers can open a comment marker and delete that comment with a second confirmation click; deleted comments no longer appear in the app or command output. Read the remaining comments when continuing work from that plan:
+
+```sh
+python3 /absolute/skill/showwork/scripts/companion.py comments --project /absolute/project --report <plan report id>
+```
+
+It prints `{"report": id, "version": ..., "note": ..., "comments": [...]}`. The note is feedback on the whole plan. Each inline comment includes `anchor.quote` (the selected text) and `body` (the feedback). Pass `--report` when you have the published plan's id; without it, the newest plan handoff from the same worktree is used. Feedback applies to that report version. The report header shows whether its original agent session is currently connected. In the desktop app, **Submit feedback** sends the saved note and inline comments, including code file paths, to that session when connected; saving alone does not send them. Reports made outside an Orca terminal can still hold feedback, but cannot submit it to an earlier agent session automatically.
 
 ### Handoff page
 
@@ -139,14 +162,14 @@ Add a **Files worth reviewing** list to a result walkthrough when files changed.
 
 ```json
 "files": [
-  {"path": "src/billing/refund.ts", "why": "Refunds now return the chat to the pool it came from.", "lines": [40, 88]},
+  {"path": "src/billing/refund.ts", "why": "Refunds now return the chat to the pool it came from."},
   {"path": "app/Services/ChatLedger.php", "why": "Every refund is written to the ledger.", "diff": true, "code": "@@ -12,6 +12,9 @@ ...\n-old line\n+new line\n context"}
 ]
 ```
 
 - `path` (project-relative) and `why` (one short sentence: what changed there and why it matters) are required.
-- Without `code`, publishing reads the current file from the project, optionally only `lines: [first, last]`. This is the default because it shows the actual code. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
-- For what changed, pass `diff: true` with `code` set to the unified diff for that file (for example `git diff -U3 -- <path>`); added and removed lines are colored and numbered from the hunk headers.
+- Without `code`, publishing shows the file's Git changes against `HEAD` when available, including staged changes, working-tree edits, new files and deleted files. Added and removed lines are colored and numbered from the hunk headers. If there is no Git change, it shows the current file. `lines: [first, last]` requests an excerpt; `diff: false` requests the whole current file. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
+- For a different comparison base or a narrower change, pass `diff: true` with `code` set to a unified diff for that file (for example `git diff -U3 -- <path>`).
 - `code` with `start_line` shows a pasted excerpt with correct line numbers. `language` overrides the extension-based coloring.
 - Show the changed region rather than a whole large file. Never include credentials or private payloads in code.
 
@@ -174,17 +197,17 @@ If only a label changed, explain that label change briefly; do not invent databa
 
 ## Limits
 
-Reports persist in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS; `SHOWWORK_STORE` overrides it for tests or advanced use only: the app does not read it, so with it set publish reports `"app": "disabled"` and the browser fallback is used; elsewhere `$XDG_DATA_HOME/showwork` or `~/.local/share/showwork`) until the user deletes them from the app. They are never put in the project, and the real code shown in a report is stored there too. Captures and one-off scripts still go in the temporary folder from `companion.py path`; it may disappear when the OS cleans `/tmp` or after a restart. Existing project `.showwork/` folders are not automatically migrated or deleted. The full session URL of the browser fallback carries a private key. Choices in the app or browser do not run code or edit product files. There is no telemetry, external API, or image-generation service. If neither the app nor the local browser can be reached, preserve the JSON and images and explain the limitation in chat; don't count a generated page as a viewed result.
+Reports persist in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS; elsewhere `$XDG_DATA_HOME/showwork` or `~/.local/share/showwork`) until the user deletes them from the app. They are never put in the project, and the real code shown in a report is stored there too. `SHOWWORK_STORE` overrides the path for tests or advanced use, but the installed app does not read it, so `--require-app` rejects that setup. Captures and one-off scripts still go in the temporary folder from `companion.py path`; it may disappear when the OS cleans `/tmp` or after a restart. Existing project `.showwork/` folders are not automatically migrated or deleted. Choices in the app do not run code or edit product files. There is no telemetry, external API, or image-generation service. If the app cannot be reached, explain the limitation in chat; do not count a generated page as a viewed result.
 
 ### Live iOS Simulator sessions (macOS)
 
 Boot a generic device with your normal device tools, using its explicit UDID; Showwork attaches to an already booted Simulator and never opens Simulator.app or changes its boot state. Require Xcode Simulator tools, Python 3.11+, and `idb` plus `idb_companion` supporting `describe`, `video-stream --format mjpeg`, `ui tap`, `ui swipe`, `ui text`, and `ui button HOME`.
 
 ```sh
-python3 /absolute/skill/showwork/scripts/companion.py simulator open --project /absolute/project --udid DEVICE-UDID --title "iPhone preview"
+python3 /absolute/skill/showwork/scripts/companion.py simulator open --project /absolute/project --udid DEVICE-UDID --title "iPhone preview" --require-app
 python3 /absolute/skill/showwork/scripts/companion.py simulator close --project /absolute/project --session SESSION-ID
 ```
 
-The selected task gets a live iOS tab. Click the device image to tap or drag it to swipe. The image fills the tab without a separate control bar; use device tools such as `idb` for text and Home. Split previews are view-only. Closing the attachment, stopping, or publishing ends its relay without shutting down the device. Ended tabs remain until removed; their last frame is available only while Showwork holds it in memory. A restarted app shows an ended placeholder.
+Confirm that the selected task gets a live iOS tab. Click the device image to tap or drag it to swipe. The image fills the tab without a separate control bar; use device tools such as `idb` for text and Home. Do not open Simulator.app as a separate viewer. Split previews are view-only. Closing the attachment, stopping, or publishing ends its relay without shutting down the device. Ended tabs remain until removed; their last frame is available only while Showwork holds it in memory. A restarted app shows an ended placeholder.
 
 A streamed preview is not report evidence. Capture report screenshots separately with the agent's device capture tool (`idb screenshot`, `simctl io screenshot`, or an existing Maestro flow) into `/tmp`, inspect them, and record device, OS, app build, interaction and capture method. Android and real devices are not supported by this attachment.

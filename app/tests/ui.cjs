@@ -14,7 +14,10 @@ const stop = () => { try { vite.kill('SIGTERM'); } catch {} };
 process.on('exit', stop);
 
 const meta = (id, type, branch, createdAt, extra = {}) => ({id, projectId: 'a', type, mode: 'handoff', title: id + ' title', branch, commit: 'abcdef1234', worktree: '/w', agent: 'claude', createdAt, version: 'v-' + id, open: false, chosen: false, ...extra});
-const handoff = (title, withFiles) => ({mode: 'handoff', title, summary: 'Summary of ' + title, sections: [{kind: 'explanation', title: 'Section', body: 'Body'}], files: withFiles ? [{path: 'src/a.ts', why: 'Core change', language: 'ts', code: 'const a = 1;\n'}] : [], checks: []});
+const handoff = (title, withFiles) => ({mode: 'handoff', title, summary: 'Summary of ' + title, sections: [{kind: 'explanation', title: 'Section', body: 'Body', html: '<p>Visual copy for comment.</p>'}], files: withFiles ? [
+  {path: 'src/a.ts', why: 'Core change', language: 'ts', code: 'const a = 1;\n'},
+  {path: 'src/changed.ts', why: 'Changed value', diff: true, code: '@@ -1 +1 @@\n-const value = 1;\n+const value = 2;'},
+] : [], checks: []});
 const decisionPage = {mode: 'decision', title: 'Pick a layout', summary: 'Choose one', question: 'Which layout?', options: [{id: 'x', title: 'Option X', body: 'X body'}, {id: 'y', title: 'Option Y', body: 'Y body'}]};
 const fixture = {
   projects: [
@@ -26,15 +29,19 @@ const fixture = {
       meta('a-plan1', 'plan', 'feat', '2026-01-01T00:00:00Z'),
       meta('b-review1', 'review', 'feat', '2026-01-02T00:00:00Z'),
       meta('c-result1', 'result', 'feat', '2026-01-03T00:00:00Z'),
-      meta('d-plan2', 'plan', 'main', '2026-01-04T00:00:00Z'),
-      meta('e-decide1', 'plan', 'main', '2026-01-05T00:00:00Z', {mode: 'decision', open: true}),
+      meta('d-plan2', 'plan', 'main', '2026-01-04T00:00:00Z', {agentSession: {
+        terminalHandle: 'term-test', terminalIncarnation: 'incarnation-test', worktreeId: 'worktree-test', threadId: 'thread-test',
+      }}),
+      meta('e-decide1', 'plan', 'main', '2026-01-05T00:00:00Z', {mode: 'decision', open: true, agentSession: {
+        terminalHandle: 'term-decision', terminalIncarnation: 'incarnation-decision', worktreeId: 'worktree-test', threadId: 'thread-decision',
+      }}),
     ],
     b: [
       meta('closed1', 'plan', null, '2025-12-31T00:00:00Z', {projectId: 'b', mode: 'decision', open: false}),
       meta('other1', 'result', null, '2026-01-01T00:00:00Z', {projectId: 'b'}),
     ],
   },
-  pages: {'a-plan1': handoff('Plan one', false), 'b-review1': handoff('Review one', false), 'c-result1': handoff('Result one', true), 'd-plan2': handoff('Plan two', false), 'e-decide1': decisionPage, closed1: {...decisionPage, title: 'Old layout question'}, other1: handoff('Other one', false)},
+  pages: {'a-plan1': handoff('Plan one', false), 'b-review1': handoff('Review one', false), 'c-result1': handoff('Result one', true), 'd-plan2': handoff('Plan two', true), 'e-decide1': decisionPage, closed1: {...decisionPage, title: 'Old layout question'}, other1: handoff('Other one', false)},
   unread: ['d-plan2', 'e-decide1', 'other1'],
 };
 
@@ -53,9 +60,32 @@ async function waitServer() {
   const context = await browser.newContext({viewport: {width: 1280, height: 800}});
   await context.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, fixture);
   const page = await context.newPage();
-  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => m.type() === 'error' && !m.text().includes('ws://127.0.0.1:1/x') && errors.push(m.text()));
+  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => m.type() === 'error' && !m.text().includes('ws://127.0.0.1:1/x') && !m.text().includes("Blocked script execution in 'about:srcdoc'") && errors.push(m.text()));
   const requested = []; page.on('request', r => requested.push(r.url()));
   await page.goto(URL_BASE);
+
+  const updatePanel = page.locator('#updates');
+  await updatePanel.getByText('Showwork 0.2.0 (local-r)').waitFor();
+  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
+  await updatePanel.getByText('Up to date with GitHub main (local-r).').waitFor();
+  assert.equal(await page.evaluate(() => window.__showworkMock.calls.filter(c => c.fn === 'checkAppUpdate').length), 0);
+  await page.evaluate(() => { window.__showworkMock.repositoryRevision = 'remote-revision'; });
+  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
+  await updatePanel.getByText(/The matching signed app build is not published yet/).waitFor();
+  await page.evaluate(() => { window.__showworkMock.availableUpdate = {version: '0.2.1', notes: 'Source commit: older-revision'}; });
+  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
+  await updatePanel.getByText(/The matching signed app build is not published yet/).waitFor();
+  assert.equal(await updatePanel.getByRole('button', {name: 'Install update'}).isVisible(), false);
+  await page.evaluate(() => { window.__showworkMock.availableUpdate = {version: '0.2.2', notes: 'Source commit: remote-revision\nImproved report loading'}; });
+  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
+  await updatePanel.getByText('GitHub main: remote-. Installed: local-r. Update 0.2.2 ready.').waitFor();
+  await updatePanel.getByText(/Improved report loading/).waitFor();
+  await updatePanel.getByRole('button', {name: 'Install update'}).click();
+  await updatePanel.getByText('Update installed. Restarting Showwork…').waitFor();
+  assert.ok(await page.evaluate(() => window.__showworkMock.calls.some(c => c.fn === 'installAppUpdate' && c.version === '0.2.2')));
+  await page.evaluate(() => { window.__showworkMock.fail.getRepositoryRevision = 'Network offline'; });
+  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
+  await updatePanel.getByText(/Could not check GitHub for updates: Network offline/).waitFor();
 
   const badge = id => page.locator(`.project[data-project-id="${id}"] .badge`);
   const item = id => page.locator(`.item[data-report-id="${id}"]`);
@@ -85,6 +115,110 @@ async function waitServer() {
   await item('d-plan2').click();
   await page.waitForFunction(() => !document.querySelector('.item[data-report-id="d-plan2"]').classList.contains('unread'));
   assert.equal(await item('d-plan2').locator('.unread-dot').count(), 0);
+  await page.getByText('Session connected').waitFor();
+  await page.evaluate(() => window.__showworkMock.disconnectedSessions.add('d-plan2'));
+  await page.getByText('Session disconnected').waitFor();
+  await page.evaluate(() => window.__showworkMock.disconnectedSessions.delete('d-plan2'));
+  await page.getByText('Session connected').waitFor();
+  // Dragging across plan prose opens a comment composer at the selected text.
+  const summary = page.locator('#report .r-summary');
+  const bounds = await summary.boundingBox();
+  const clickBackground = async () => {
+    const rect = await page.locator('#report .pane-head').boundingBox();
+    await page.mouse.click(rect.x + 10, rect.y + rect.height / 2);
+  };
+  await page.mouse.move(bounds.x + 4, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 112, bounds.y + bounds.height / 2, {steps: 12});
+  await page.mouse.up();
+  const composer = page.getByRole('dialog', {name: 'Add plan comment'});
+  await composer.waitFor();
+  const selectedQuote = await composer.locator('blockquote').textContent();
+  assert.ok(selectedQuote.trim().length > 0);
+  assert.equal(await page.locator('#report .plan-comment-mark.preview').count(), 1);
+  await clickBackground();
+  assert.equal(await composer.count(), 0);
+  assert.equal(await page.locator('#report .plan-comment-mark.preview').count(), 0);
+  await page.mouse.move(bounds.x + 4, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 112, bounds.y + bounds.height / 2, {steps: 12});
+  await page.mouse.up();
+  await composer.waitFor();
+  assert.equal(await page.locator('#report .plan-comment-mark.preview').count(), 1);
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Please clarify the rollout step.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await page.locator('.plan-comment-pin').waitFor();
+  assert.equal(await page.locator('.plan-comment-mark').count(), 1);
+  assert.equal(await page.locator('.plan-comment-mark.preview').count(), 0);
+  assert.equal((await page.evaluate(() => window.__showworkMock.calls)).at(-1).fn, 'addComment');
+  // The HTML visual is an iframe: selection there must open the same composer.
+  const visual = page.frameLocator('#report .section-grid iframe').locator('p');
+  await visual.evaluate(el => {
+    const doc = el.ownerDocument;
+    const range = doc.createRange();
+    range.setStart(el.firstChild, 0);
+    range.setEnd(el.firstChild, 8);
+    const selection = doc.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await composer.waitFor();
+  assert.ok((await composer.locator('blockquote').textContent()).includes('Visual'));
+  assert.equal(await page.frameLocator('#report .section-grid iframe').locator('.plan-comment-mark.preview').count(), 1);
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Frame feedback');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  const visualPin = page.locator('#report .report-body > .plan-comment-pin');
+  await visualPin.waitFor();
+  await visualPin.click();
+  const visualComment = page.getByRole('dialog', {name: 'Plan comment'});
+  await visualComment.getByText('Frame feedback').waitFor();
+  await clickBackground();
+  assert.equal(await visualComment.count(), 0);
+  await visualPin.click();
+  await visualComment.waitFor();
+  const visualBounds = await visual.boundingBox();
+  await page.mouse.click(visualBounds.x + visualBounds.width / 2, visualBounds.y + visualBounds.height / 2);
+  assert.equal(await visualComment.count(), 0);
+  await visualPin.click();
+  await visualComment.waitFor();
+  await visualComment.getByRole('button', {name: 'Delete', exact: true}).click();
+  await visualComment.getByRole('button', {name: 'Confirm delete'}).click();
+  assert.equal(await visualPin.count(), 0);
+  // A selection across syntax-highlighted diff lines is one code comment.
+  await page.locator('#report details.file').nth(1).locator('summary').click();
+  const diffEditor = page.locator('#report details.file').nth(1).locator('.code');
+  await diffEditor.locator('.line.add').waitFor();
+  await diffEditor.evaluate(editor => {
+    const sources = editor.querySelectorAll('.line > .src');
+    const first = sources[1], last = sources[2];
+    const firstNode = first.querySelector('.mark').firstChild;
+    const walker = document.createTreeWalker(last, NodeFilter.SHOW_TEXT);
+    let endNode, node; while ((node = walker.nextNode())) endNode = node;
+    const range = document.createRange();
+    range.setStart(firstNode, 0); range.setEnd(endNode, endNode.length);
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+  });
+  await composer.waitFor();
+  assert.equal(await composer.locator('blockquote').textContent(), '-const value = 1;\n+const value = 2;');
+  assert.ok(await diffEditor.locator('.plan-comment-mark.preview').count() >= 2);
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Keep the old behavior for empty values.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await diffEditor.locator('.plan-comment-pin').waitFor();
+  const overallNote = page.getByRole('textbox', {name: 'Overall note'});
+  await overallNote.fill('Please keep the rollout reversible.');
+  await page.getByRole('button', {name: 'Save note'}).click();
+  await page.getByText('Note saved.').waitFor();
+  await overallNote.fill('Please keep the rollout reversible and add a rollback step.');
+  await page.getByRole('button', {name: 'Submit feedback'}).click();
+  await page.getByText('Sent to the original session.').waitFor();
+  const feedbackCall = (await page.evaluate(() => window.__showworkMock.calls)).at(-1);
+  assert.equal(feedbackCall.fn, 'submitFeedback');
+  assert.equal(feedbackCall.note, 'Please keep the rollout reversible and add a rollback step.');
+  assert.equal(feedbackCall.inline.length, 2);
+  assert.equal(feedbackCall.inline[0].quote, selectedQuote);
+  assert.deepEqual(feedbackCall.inline[1], {target: 'file-1', quote: '-const value = 1;\n+const value = 2;', body: 'Keep the old behavior for empty values.'});
+  assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), true);
   await openSwitcher();
   await page.waitForFunction(() => document.querySelector('.project[data-project-id="a"] .badge')?.textContent === '1');
   await page.keyboard.press('Escape');
@@ -92,8 +226,28 @@ async function waitServer() {
   // select a report: title and files accordion
   await item('c-result1').click();
   await page.getByRole('heading', {name: 'Result one'}).waitFor();
+  assert.equal(await page.locator('.plan-comment-pin').count(), 0);
+  await item('d-plan2').click();
+  await page.locator('.plan-comment-pin').waitFor();
+  assert.equal(await page.getByRole('textbox', {name: 'Overall note'}).inputValue(), 'Please keep the rollout reversible and add a rollback step.');
+  assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), true);
+  await page.locator('.plan-comment-pin').click();
+  await page.getByRole('dialog', {name: 'Plan comment'}).getByText('Please clarify the rollout step.').waitFor();
+  await page.getByRole('dialog', {name: 'Plan comment'}).getByRole('button', {name: 'Delete', exact: true}).click();
+  await page.getByRole('dialog', {name: 'Plan comment'}).getByRole('button', {name: 'Confirm delete'}).click();
+  assert.equal(await page.locator('.plan-comment-pin').count(), 0);
+  await item('c-result1').click();
+  await item('d-plan2').click();
+  assert.equal(await page.locator('.plan-comment-pin').count(), 0);
+  assert.equal(await page.locator('#report .report-body > .plan-comment-pin').count(), 0);
+  await item('c-result1').click();
+  await page.getByRole('heading', {name: 'Result one'}).waitFor();
   assert.ok(await page.getByRole('heading', {name: 'Files worth reviewing'}).isVisible());
-  assert.equal(await page.locator('#report details.file').count(), 1);
+  assert.equal(await page.locator('#report details.file').count(), 2);
+  await page.locator('#report details.file').nth(1).locator('summary').click();
+  await page.locator('#report details.file').nth(1).locator('.line.add').waitFor();
+  assert.equal(await page.locator('#report details.file').nth(1).locator('.line.add').count(), 1);
+  assert.equal(await page.locator('#report details.file').nth(1).locator('.line.del').count(), 1);
   assert.equal(await item('c-result1').getAttribute('aria-current'), 'true');
 
   // list -> flow keeps selection
@@ -133,7 +287,12 @@ async function waitServer() {
   await page.keyboard.press('Escape');
   await working.click();
   assert.equal(await working.getAttribute('aria-current'), 'true');
-  await page.getByText('Working on it. The report appears here when it is ready.').waitFor();
+  await page.locator('.draft-document').waitFor();
+  const firstChunk = 'The first confirmed result. '.repeat(20);
+  await page.evaluate(text => window.__showworkMock.progress('a', 'run1', text), firstChunk);
+  await page.waitForFunction(full => { const size = document.querySelector('.draft-copy')?.textContent.length ?? 0; return size > 2 && size < full.length; }, firstChunk);
+  await page.evaluate(() => window.__showworkMock.progress('a', 'run1', '\n\nThe check passed.'));
+  await page.waitForFunction(full => document.querySelector('.draft-copy')?.textContent === full + '\n\nThe check passed.', firstChunk);
   assert.deepEqual(await page.locator('.tab').allTextContents(), ['Report']);
   const session = (id, title) => ({id, projectId: 'a', run: 'run1', kind: 'browser', title, url: 'http://localhost:3000/', width: 1280, height: 800, port: 1, ws: 'ws://127.0.0.1:1/x', pid: 1, startedAt: `2026-02-02T10:05:0${id.slice(-1)}Z`, endedAt: null, alive: true});
   await page.evaluate(s => window.__showworkMock.addSession(s), session('s1', 'Login page'));
@@ -169,6 +328,16 @@ async function waitServer() {
   await page.locator('.item.running').click({button: 'right'});
   await page.getByRole('menuitem', {name: 'Remove from list'}).click();
   await page.waitForFunction(() => !document.querySelector('.item.running'));
+  await page.evaluate(() => window.__showworkMock.start({id: 'run3', projectId: 'a', type: 'result', title: 'Live result', branch: 'feat', worktree: '/w', agent: 'codex', startedAt: '2026-02-03T00:00:00Z'}));
+  await page.locator('.item.running[data-run-id="run3"]').click();
+  await page.evaluate(() => window.__showworkMock.progress('a', 'run3', 'Draft content'));
+  await page.locator('.draft-copy', {hasText: 'Draft content'}).waitFor();
+  await page.evaluate(() => {
+    window.__showworkMock.arrive('a', {id: 'live-result', projectId: 'a', type: 'result', mode: 'handoff', title: 'Final result', branch: 'feat', commit: null, worktree: '/w', agent: 'codex', createdAt: '2026-02-03T00:01:00Z', version: 'v-final', run: 'run3', open: false, chosen: false}, {mode: 'handoff', title: 'Final result', summary: 'Final summary', sections: [], files: [], checks: []});
+    window.__showworkMock.finish('a', 'run3');
+  });
+  await page.getByRole('heading', {name: 'Final result'}).waitFor();
+  assert.equal(await page.locator('.draft-document').count(), 0);
 
   // filters live in a popover behind the funnel button
   const filterBtn = page.locator('.filter-btn');
@@ -177,7 +346,7 @@ async function waitServer() {
   await openFilters();
   assert.ok(await page.getByLabel('Branch').evaluate(el => el === document.activeElement), 'focus moves into the popover');
   await page.getByLabel('Branch').selectOption('feat');
-  assert.equal(await page.locator('.item').count(), 3);
+  assert.equal(await page.locator('.item').count(), 4);
   assert.ok(await page.locator('.filter-pop').isVisible(), 'the popover stays open while choosing');
   await page.getByLabel('Type').selectOption('review');
   assert.equal(await page.locator('.item').count(), 1);
@@ -188,7 +357,7 @@ async function waitServer() {
   assert.equal(await page.locator('.item').count(), 1, 'closing keeps the filters on');
   await openFilters();
   await page.getByRole('button', {name: 'Clear filters'}).click();
-  assert.equal(await page.locator('.item').count(), 5);
+  assert.equal(await page.locator('.item').count(), 6);
   assert.equal(await page.locator('.filter-count').count(), 0);
   await page.locator('#report').click(); // clicking outside closes it
   assert.equal(await page.locator('.filter-pop').count(), 0);
@@ -204,7 +373,7 @@ async function waitServer() {
   await page.getByRole('button', {name: 'Choose this option'}).click();
   await page.getByText('This decision is closed').waitFor();
   await page.getByRole('button', {name: 'Choose this option'}).click();
-  await page.getByText('Choice saved. You can continue in chat.').waitFor();
+  await page.getByText('Choice sent to the original session.').waitFor();
   const calls = await page.evaluate(() => window.__showworkMock.calls);
   assert.deepEqual(calls.at(-1), {fn: 'submitChoice', projectId: 'a', reportId: 'e-decide1', version: 'v-e-decide1', choice: 'y'});
   assert.equal(await page.locator('.pane-head .needs-choice').count(), 0);

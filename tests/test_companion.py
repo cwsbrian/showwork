@@ -221,6 +221,51 @@ class CompanionTest(unittest.TestCase):
         self.assertEqual(files[1]["code"], "one\ntwo\nthree\nfour\n")
         self.assertEqual(files[2]["code"], "@@ -1 +1 @@\n-a\n+b")
 
+    def test_files_to_review_show_git_changes_by_default(self):
+        repo = self.project / "repo"
+        repo.mkdir()
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
+        git("init", "-q")
+        git("config", "user.name", "Test")
+        git("config", "user.email", "test@example.com")
+        (repo / "changed.py").write_text("old\nsame\n")
+        (repo / "deleted.py").write_text("gone\n")
+        (repo / "unchanged.py").write_text("keep\n")
+        git("add", ".")
+        git("commit", "-qm", "baseline")
+        (repo / "changed.py").write_text("new\nsame\n")
+        git("add", "changed.py")  # staged changes also appear
+        (repo / "changed.py").write_text("new\nsame\nmore\n")  # working-tree edits appear too
+        (repo / "deleted.py").unlink()
+        (repo / "new.py").write_text("fresh\n")
+        page = copy.deepcopy(HANDOFF)
+        page["files"] = [
+            {"path": "changed.py", "why": "Modified"},
+            {"path": "deleted.py", "why": "Removed"},
+            {"path": "new.py", "why": "Added"},
+            {"path": "unchanged.py", "why": "Unchanged"},
+            {"path": "changed.py", "why": "Requested excerpt", "lines": [1, 2]},
+            {"path": "changed.py", "why": "Requested whole file", "diff": False},
+        ]
+        source = self.project / "git-diff-report.json"
+        source.write_text(json.dumps(page))
+        files = COMPANION.publish(repo, source)["files"]
+        self.assertTrue(files[0]["diff"])
+        self.assertIn("-old", files[0]["code"])
+        self.assertIn("+new", files[0]["code"])
+        self.assertIn("+more", files[0]["code"])
+        self.assertTrue(files[1]["diff"])
+        self.assertIn("-gone", files[1]["code"])
+        self.assertTrue(files[2]["diff"])
+        self.assertIn("+fresh", files[2]["code"])
+        self.assertNotIn("diff", files[3])
+        self.assertEqual(files[3]["code"], "keep\n")
+        self.assertEqual(files[4]["code"], "new\nsame")
+        self.assertNotIn("diff", files[4])
+        self.assertEqual(files[5]["code"], "new\nsame\nmore\n")
+        self.assertFalse(files[5]["diff"])
+
     def test_files_to_review_stay_inside_the_project(self):
         outside = Path(self.temp.name).parent / "outside-showwork-test.txt"
         (self.project / ".env").write_text("SECRET=1")
@@ -291,6 +336,24 @@ class CompanionTest(unittest.TestCase):
         # a stopped run without a report leaves nothing behind
         self.assertEqual(self.cli("stop", "--type", "plan").returncode, 0)
         self.assertEqual(list(running.glob("*.json")), [])
+
+    def test_progress_appends_text_to_current_run_until_publish(self):
+        started = json.loads(self.cli("start", "--type", "review", "--title", "Review").stdout)
+        project_id = COMPANION.store.project_identity(self.project)["id"]
+        marker = Path(self.store_dir.name) / "projects" / project_id / "running" / (started["run"] + ".json")
+        for chunk in ["Finding: First confirmed issue", "\n\nCheck: Reproduced the issue"]:
+            result = self.cli("progress", "--type", "review", "--text", chunk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        draft = json.loads(marker.read_text())
+        self.assertEqual(draft["revision"], 2)
+        self.assertEqual(draft["draft_text"], "Finding: First confirmed issue\n\nCheck: Reproduced the issue")
+        page = Path(started["directory"]) / "review.json"
+        page.write_text(json.dumps({**HANDOFF, "checks": []}))
+        published = self.cli("publish", "--file", str(page), "--type", "review")
+        self.assertEqual(published.returncode, 0, published.stderr)
+        self.assertFalse(marker.exists())
+        final_page = COMPANION.store.report_dir(COMPANION.store.latest_report(self.project)) / "page.json"
+        self.assertNotIn("draft_text", json.loads(final_page.read_text()))
 
     def test_each_publish_creates_a_new_report(self):
         a, b = self.publish(DECISION), self.publish(DECISION)
@@ -365,7 +428,7 @@ class CompanionTest(unittest.TestCase):
         self.assertEqual(failure.exception.code, 409)
         self.assertFalse((COMPANION.store.report_dir(decision["report"]) / "events.jsonl").exists())
 
-    def run_open_app(self, running, store=None):
+    def run_open_app(self, running, store=None, foreground=False):
         calls = []
 
         def fake(command, **kwargs):
@@ -378,7 +441,7 @@ class CompanionTest(unittest.TestCase):
             os.environ.pop("SHOWWORK_STORE", None)
             if store:
                 os.environ["SHOWWORK_STORE"] = store
-            return COMPANION.open_app(), calls
+            return COMPANION.open_app(foreground=foreground), calls
 
     def test_open_app_disabled_for_custom_store(self):
         status, calls = self.run_open_app(True, store=self.store_dir.name)
@@ -395,6 +458,11 @@ class CompanionTest(unittest.TestCase):
         self.assertEqual(status, "opened")
         self.assertIn(["open", "-g", "-a", "Showwork", "--args", "--background"], calls)
 
+    def test_foreground_open_raises_showwork_window_even_if_already_running(self):
+        status, calls = self.run_open_app(True, foreground=True)
+        self.assertEqual(status, "opened")
+        self.assertEqual(calls, [["open", "-a", "Showwork"]])
+
     def test_publish_never_writes_project(self):
         self.publish(DECISION)
         self.assertEqual(sorted(p.name for p in self.project.iterdir()), ["page-source.json"])
@@ -407,6 +475,22 @@ class CompanionTest(unittest.TestCase):
         out = json.loads(result.stdout)
         self.assertEqual((out["app"], out["mode"]), ("disabled", "decision"))
         self.assertTrue(Path(out["path"], "page.json").is_file())
+
+    def test_require_app_rejects_commands_before_creating_runs_sessions_or_reports(self):
+        source = self.project / "cli.json"
+        source.write_text(json.dumps(DECISION))
+        commands = [
+            ("start", "--type", "plan", "--require-app"),
+            ("browser", "open", "--url", "http://localhost:3000", "--require-app"),
+            ("simulator", "open", "--udid", "example-udid", "--require-app"),
+            ("publish", "--file", str(source), "--type", "plan", "--require-app"),
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                result = self.cli(*command)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("Showwork app is unavailable", result.stderr)
+        self.assertEqual(list(Path(self.store_dir.name).rglob("*.json")), [])
 
 
 class SimulatorCleanupTests(unittest.TestCase):

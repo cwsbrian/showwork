@@ -2,7 +2,7 @@
 
 **See what changed after the work is done.**
 
-Showwork stays off during ordinary work. Invoke a command when you want to see changed screens and behavior, completed checks, and remaining issues in a browser.
+Showwork stays off during ordinary work. Invoke a command when you want to see changed screens and behavior, completed checks, and remaining issues in the Showwork app.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,9 @@ The explanation focuses on:
 - Which changed files are worth reviewing and why each matters
 - What was actually checked and what remains unresolved
 
-Reports open in the optional macOS Showwork app (see [App (macOS)](docs/installation.md#app-macos)); without it, a localhost browser page is used.
+Explicit Showwork commands require the macOS Showwork app (see [App (macOS)](docs/installation.md#app-macos)). Live web pages and iOS Simulators appear as tabs inside it. If the app is unavailable, the command reports that limit instead of opening a separate browser or Simulator window.
+
+The app has **Check for updates** below the project switcher. It compares the installed app's build commit with GitHub's latest `main` commit, then downloads and installs the matching signed build when available. [Release setup and the first-install step](docs/installation.md#app-macos) are separate from updating the agent skills.
 
 It avoids a long work diary or approval at every step. Put supporting technical detail under “Show details.”
 
@@ -47,9 +49,8 @@ It avoids a long work diary or approval at every step. Put supporting technical 
 | Purpose | Codex | Claude user installation | Claude plugin |
 | --- | --- | --- | --- |
 | Plan only | `$showwork-plan` | `/showwork-plan` | `/showwork:plan` |
-| Review changes | `$showwork-review` | `/showwork-review` | `/showwork:review` |
+| Review the coding session and its changes, including adversarial checks | `$showwork-review` | `/showwork-review` | `/showwork:review` |
 | Verify behavior | `$showwork-verify` | `/showwork-verify` | `/showwork:verify` |
-| Adversarial review with visual report | `$showwork-adverial-review` | `/showwork-adverial-review` | `/showwork:adverial-review` |
 | Set Obsidian vault and project folders | `$showwork-set-location` | `/showwork-set-location` | `/showwork:set-location` |
 | Save agreed decisions and current architecture | `$showwork-save` | `/showwork-save` | `/showwork:save` |
 
@@ -80,23 +81,23 @@ You can also use the Python installer directly. Update the source repository fir
 python3 /absolute/path/to/showwork/scripts/install_codex.py --user
 ```
 
-## Visual adversarial review
-
-The command retains the requested spelling `adverial-review`. Invoke it according to your installation.
+## Visual code review
 
 | Installation | Example |
 | --- | --- |
-| npx user installation · Claude Code | `/showwork-adverial-review Review my current changes` |
-| npx user installation · Codex | `$showwork-adverial-review Review my current changes` |
-| Claude plugin | `/showwork:adverial-review Review my current changes` |
+| npx user installation · Claude Code | `/showwork-review Review my current changes` |
+| npx user installation · Codex | `$showwork-review Review my current changes` |
+| Claude plugin | `/showwork:review Review my current changes` |
 
-The review reads the changed scope and actual call paths, then examines code-specific counterexamples involving permissions, boundaries, duplicate actions, and partial failures. It presents severity, source location, reproduction conditions, expected and actual behavior, and evidence in a Showwork report (the app, or the browser fallback). Fixes are applied only when separately requested.
+The review reads the session's requests, corrections, choices and claimed checks alongside the actual diff and execution paths. It checks for unfinished requests or unsupported claims, then examines code-specific counterexamples involving permissions, boundaries, duplicate actions and partial failures according to the change's risk. One report combines session and code findings with severity, reproduction conditions and evidence. Fixes are applied only when separately requested.
 
-For mobile apps, launch the target iOS Simulator or Android Emulator, then **install the review build → launch the app → interact with relevant screens → attach real screenshots**. Record the device, OS, build, interactions, and capture source. If the simulator, SDK, build setup, or control tool is unavailable, mark those steps unverified and continue the code review where possible. A mobile web viewport or mockup does not replace a native app capture.
+The planning command inspects the project first, asks only unsettled questions that materially change the outcome, and builds an implementation sequence with acceptance checks. A clear task can need no questions; complex work can need several rounds.
 
-## Review together in the browser
+For iOS apps, attach the target Simulator inside Showwork, then **install the review build → launch the app → interact with relevant screens → attach real screenshots**. Record the device, OS, build, interactions, and capture source. If the in-app simulator, SDK, build setup, or control tool is unavailable, mark those steps unverified and continue the code review where possible. Android in-app mirroring is not yet supported. A mobile web viewport or mockup does not replace a native app capture.
 
-![Showwork choice screen comparing two layouts in a browser](docs/images/companion-decision.png)
+## Review together in the app
+
+![Showwork choice screen comparing two layouts](docs/images/companion-decision.png)
 
 - **Choice screen:** Compare rendered UI or diagrams side by side. Record a choice by click or keyboard. If the screen changes, an earlier choice does not apply to the new question.
 - **Result screen:** Explain changes with full-width visuals and a table of contents. Show a short, visible list of important changed files and why each matters. For router changes, lead with a connected flowchart of branches and responses. For database changes, lead with a before/after ERD showing PK/FK fields and relationship counts. Put route tables, schema comparisons, and migration/backfill/rollback details in supporting material. Include component and data-flow diagrams for structural changes. Cover only areas changed in the task.
@@ -108,9 +109,9 @@ By default, delegate only report writing to a Codex Luna or Claude Haiku subagen
 
 Reports are kept in the Showwork app folder (`~/Library/Application Support/Showwork` on macOS), never in the project, until you delete them from the app. Captures and check records go in a per-project temporary folder under **`/tmp`**, which the OS may clean; Windows uses its own temporary directory.
 
-The browser tool lives inside the `showwork` skill and is copied with both user and project installations. It uses only the Python standard library and updates the page automatically. See the [browser guide](skills/showwork/references/companion.md) for usage and page format. Browser choices are recorded, but they do not automatically wake a waiting agent; continue in chat when needed.
+The companion tool lives inside the `showwork` skill and is copied with both user and project installations. It uses only the Python standard library and updates the report automatically. See the [companion guide](skills/showwork/references/companion.md) for usage and page format. Choices are recorded and sent to the original session when that session is connected; otherwise they remain saved for later review.
 
-Web captures can run in headless Chrome and appear as live tabs in the Showwork app; see [capture web pages in the app](skills/showwork/references/companion.md#capture-web-pages-in-the-app).
+Web captures run in a browser session shown as a live tab in the Showwork app; see [capture web pages in the app](skills/showwork/references/companion.md#capture-web-pages-in-the-app).
 
 ## Record verification evidence
 
@@ -143,7 +144,7 @@ The [validation record](docs/validation.md) describes what was actually checked 
 .claude-plugin/plugin.json   Claude Code manifest
 commands/                   Short Claude commands
 instructions/manual.md      Shared command-only guidance for both environments
-skills/                     Five shared skills for both environments
+skills/                     Six shared skills for both environments
 skills/showwork/scripts/     Local browser companion
 skills/showwork/assets/      Choice and result screens
 scripts/install_codex.py     User/project skill and instruction installer

@@ -12,7 +12,9 @@ Determine what the current result demonstrably does. Use the user's criteria and
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
-Start by running `companion.py start --project /absolute/project --type verify --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+Start by running `companion.py start --project /absolute/project --type verify --agent <claude|codex> --require-app` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
+
+Append completed check results as short text chunks to the live document with `companion.py progress` as they are observed; see the companion guide. Publish the complete verification at the end.
 
 ## Define the claims
 
@@ -53,4 +55,4 @@ Check that routing diagrams connect meaningful branches to their actual response
 
 Lead with the overall verified result and any blocking failure or gap. Include the relevant evidence, material limits, and the next concrete action needed for a failing or unverified criterion. Keep a trivial verification short. Do not claim completion while a required criterion remains failing or unverified, and do not silently start fixing after a verification-only request.
 
-When presenting an implementation handoff, use the [browser companion](../showwork/references/companion.md) in handoff mode, published with `companion.py publish --project /absolute/project --file <json> --type verify --agent <claude|codex>`, to connect result visuals and the verified/failed/unverified criteria. Say where the report is (the Showwork app if the publish output says `"app": "opened"`, otherwise start `serve` and share the URL). This explanation has no approval button. Preserve a short chat summary and distinguish observed screenshots from explanatory diagrams.
+When presenting an implementation handoff, use the [browser companion](../showwork/references/companion.md) in handoff mode, published with `companion.py publish --project /absolute/project --file <json> --type verify --agent <claude|codex> --require-app`, to connect result visuals and the verified/failed/unverified criteria. Confirm the report in the Showwork app before saying it is shown; do not switch to a separate browser. This explanation has no approval button. Preserve a short chat summary and distinguish observed screenshots from explanatory diagrams.

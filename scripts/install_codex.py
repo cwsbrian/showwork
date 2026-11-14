@@ -9,7 +9,8 @@ import shutil
 import tempfile
 
 
-SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-adverial-review", "showwork-set-location", "showwork-save")
+SKILLS = ("showwork", "showwork-plan", "showwork-review", "showwork-verify", "showwork-set-location", "showwork-save")
+RETIRED_SKILLS = ("showwork-adverial-review",)
 SOURCE = Path(__file__).resolve().parents[1] / "skills"
 TEMPLATE = SOURCE.parent / "instructions" / "manual.md"
 # Keep legacy markers so updates replace old automatic instructions in place.
@@ -112,6 +113,12 @@ def install(target=None, source=SOURCE, runtime="codex", check_only=False):
             previous[name] = None
             pending.append(name)
 
+    retired = {}
+    for name in RETIRED_SKILLS:
+        installed = destination / name
+        if installed.exists() or installed.is_symlink():
+            retired[name] = contents(installed)
+
     backup_root = destination.parent / "showwork-backups"
     if backup_root.is_symlink() or (backup_root.exists() and not backup_root.is_dir()):
         raise ValueError(f"Expected a real backup directory: {backup_root}")
@@ -119,7 +126,7 @@ def install(target=None, source=SOURCE, runtime="codex", check_only=False):
     if lock.exists() or lock.is_symlink():
         raise ValueError(f"Another install is active. If it was interrupted, remove {lock} and retry.")
     if check_only:
-        return len(pending)
+        return len(pending) + len(retired)
     instruction_directory.mkdir(parents=True, exist_ok=True)
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -133,18 +140,23 @@ def install(target=None, source=SOURCE, runtime="codex", check_only=False):
             current = contents(installed) if installed.exists() or installed.is_symlink() else None
             if current != snapshot:
                 raise ValueError(f"Files changed during installation: {installed}; retry.")
+        for name, snapshot in retired.items():
+            installed = destination / name
+            if contents(installed) != snapshot:
+                raise ValueError(f"Files changed during installation: {installed}; retry.")
         if project_instructions(instruction_directory, skills_root, runtime) != (instruction_path, before, after):
             raise ValueError("Instructions changed during installation; retry.")
-        apply_update(destination, source, pending, previous, instruction_path, before, after)
+        apply_update(destination, source, pending, previous, retired, instruction_path, before, after)
     finally:
         lock.rmdir()
-    return len(pending)
+    return len(pending) + len(retired)
 
 
-def apply_update(destination, source, pending, previous, instruction_path, before, after):
+def apply_update(destination, source, pending, previous, retired, instruction_path, before, after):
     """Stage first, retain old files outside skill discovery, roll back failed writes."""
     backup = None
     applied = []
+    removed = []
     instruction_existed = instruction_path.exists()
     instruction_write_started = False
     with tempfile.TemporaryDirectory(prefix=".showwork-stage-", dir=destination.parent) as temporary:
@@ -152,7 +164,7 @@ def apply_update(destination, source, pending, previous, instruction_path, befor
         for name in pending:
             shutil.copytree(source / name, staged / name,
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
-        if any(previous[name] is not None for name in pending) or (instruction_existed and before != after):
+        if any(previous[name] is not None for name in pending) or retired or (instruction_existed and before != after):
             backup_root = destination.parent / "showwork-backups"
             if backup_root.is_symlink() or (backup_root.exists() and not backup_root.is_dir()):
                 raise ValueError(f"Expected a real backup directory: {backup_root}")
@@ -168,10 +180,16 @@ def apply_update(destination, source, pending, previous, instruction_path, befor
                 if previous[name] is not None:
                     os.replace(destination / name, backup / name)
                 os.replace(staged / name, destination / name)
+            for name in retired:
+                os.replace(destination / name, backup / name)
+                removed.append(name)
             if before != after:
                 instruction_write_started = True
                 write_instructions(instruction_path, after)
         except BaseException:
+            for name in reversed(removed):
+                if (backup / name).exists():
+                    os.replace(backup / name, destination / name)
             for name in reversed(applied):
                 installed = destination / name
                 if previous[name] is not None:

@@ -12,7 +12,9 @@ The main deliverable is understanding the finished result: **what changed, how i
 
 Explain in the user's language with short sentences and familiar words a third-grade child could understand. Speak respectfully to an adult. Explain necessary technical terms immediately. Keep important failures and unchecked behavior visible; show the key changed files and why they matter, while placing commands and supporting detail behind optional browser sections.
 
-Start by running `companion.py start --project /absolute/project --type result --agent <claude|codex>` from the [companion](references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+Start by running `companion.py start --project /absolute/project --type result --agent <claude|codex> --require-app` from the [companion](references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
+
+As confirmed wording is ready, append short text chunks to the live document with `companion.py progress` as described in the companion guide. The user can watch the report being written. Publish the complete report at the end.
 
 ## Establish the result
 
@@ -23,7 +25,7 @@ Start by running `companion.py start --project /absolute/project --type result -
 
 ## Show the outcome
 
-Read the [browser companion guide](references/companion.md) and publish a handoff page with `companion.py publish --project /absolute/project --file <json> --type result --agent <claude|codex>`. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
+Read the [browser companion guide](references/companion.md) and publish a handoff page with `companion.py publish --project /absolute/project --file <json> --type result --agent <claude|codex> --require-app`. Lead with the result and a concrete before/after example, then relevant visuals, a short list of important changed files with a reason for each, checks and remaining problems. This is a walkthrough, not an approval gate.
 
 - **UI:** show actual resulting screens and important interactions when tools permit, with capture provenance. Label explanatory mockups separately.
   For web captures, use the [in-app browser](references/companion.md#capture-web-pages-in-the-app).
@@ -36,11 +38,11 @@ Cover every materially changed area without long visible paragraphs. Follow the 
 
 Reports are stored in the Showwork app folder, never in the project. Keep captures and one-off scripts in the temporary directory returned by `companion.py path --project ...`, never in the project. If the optional [evidence helper](../../scripts/showwork.py) is present, it also stores records in temporary storage; read its help before use. No helper is required to judge the evidence.
 
-Give a short chat summary. If the publish output says `"app": "opened"`, say the report is in the Showwork app; otherwise start `serve` and give the full browser URL. If neither can run, share the saved artifact and the precise limitation. Do not claim completion while a required behavior remains unproved or failing.
+Give a short chat summary and say the report is in the Showwork app only after confirming it there. If the app or an in-app session cannot run, name the precise limitation. Do not claim completion while a required behavior remains unproved or failing.
 
 ## Other explicit commands
 
-Use [showwork-plan](../showwork-plan/SKILL.md) for planning only, [showwork-review](../showwork-review/SKILL.md) for review only, [showwork-verify](../showwork-verify/SKILL.md) for verification only, and [showwork-adverial-review](../showwork-adverial-review/SKILL.md) for an adversarial review with a visual report and real mobile simulator captures where applicable. Honor each command's scope; these are not mandatory extra stages.
+Use [showwork-plan](../showwork-plan/SKILL.md) for planning only, [showwork-review](../showwork-review/SKILL.md) for a combined coding-session and risk-proportional adversarial review, and [showwork-verify](../showwork-verify/SKILL.md) for verification only. Honor each command's scope; these are not mandatory extra stages.
 
 For explicit Obsidian memory commands, use [showwork-set-location](../showwork-set-location/SKILL.md) to set the vault and project document folders and [showwork-save](../showwork-save/SKILL.md) to save agreed decisions and current architecture. Ordinary Showwork walkthroughs do not write to the vault.
 

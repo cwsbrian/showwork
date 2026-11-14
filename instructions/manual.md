@@ -11,7 +11,6 @@ For an invoked command, read the matching skill under `{{SKILLS_ROOT}}`:
 - Planning: `{{SKILLS_ROOT}}/showwork-plan/SKILL.md`.
 - Review: `{{SKILLS_ROOT}}/showwork-review/SKILL.md`.
 - Verification: `{{SKILLS_ROOT}}/showwork-verify/SKILL.md`.
-- Adversarial review: `{{SKILLS_ROOT}}/showwork-adverial-review/SKILL.md`.
 - Obsidian location: `{{SKILLS_ROOT}}/showwork-set-location/SKILL.md`.
 - Obsidian decision save: `{{SKILLS_ROOT}}/showwork-save/SKILL.md`.
 

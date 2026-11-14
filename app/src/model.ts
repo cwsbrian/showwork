@@ -11,6 +11,12 @@ export interface ReportMeta {
   createdAt: string;
   version: string;
   run?: string | null;
+  agentSession?: {
+    terminalHandle: string;
+    terminalIncarnation: string;
+    worktreeId: string;
+    threadId: string | null;
+  } | null;
   open: boolean;
   chosen: boolean;
   read?: boolean;
@@ -54,6 +60,8 @@ export interface RunningItem {
   worktree: string;
   agent: string;
   startedAt: string;
+  revision?: number;
+  draftText?: string;
   ended?: boolean;
 }
 

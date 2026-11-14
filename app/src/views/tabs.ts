@@ -71,13 +71,7 @@ export function createTabs(container: HTMLElement, h: {
     h.reportHost.hidden = selected !== 'report';
     if (selected === 'report') {
       body.append(h.reportHost);
-      if (ctx?.running) {
-        h.reportHost.hidden = true;
-        const waiting = document.createElement('p');
-        waiting.className = 'report-waiting';
-        waiting.textContent = 'Working on it. The report appears here when it is ready.';
-        body.append(waiting);
-      } else if (ctx?.stopped) {
+      if (ctx?.stopped) {
         const stopped = document.createElement('p');
         stopped.className = 'report-waiting';
         stopped.textContent = 'This task ended without a report.';

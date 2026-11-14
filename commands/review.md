@@ -1,6 +1,6 @@
 ---
-description: Review coding changes and record findings with Showwork.
-argument-hint: "[change or review scope]"
+description: Review a coding session and its changes, including adversarial checks, in one Showwork report.
+argument-hint: "[session, change, or review scope]"
 disable-model-invocation: true
 ---
 

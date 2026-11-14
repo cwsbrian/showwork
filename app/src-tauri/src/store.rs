@@ -93,6 +93,13 @@ pub enum StoreError {
     BadId,
     NotFound,
     NotADecision,
+    NotAPlan,
+    InvalidComment,
+    InvalidNote,
+    NoFeedback,
+    AlreadySubmitted,
+    NoAgentSession,
+    AgentUnavailable(String),
     Closed,
     StaleVersion,
     UnknownChoice,
@@ -106,6 +113,13 @@ impl fmt::Display for StoreError {
             StoreError::BadId => write!(f, "Invalid id"),
             StoreError::NotFound => write!(f, "Not found"),
             StoreError::NotADecision => write!(f, "This report is not a decision"),
+            StoreError::NotAPlan => write!(f, "Comments are available on plan reports"),
+            StoreError::InvalidComment => write!(f, "Invalid comment or text selection"),
+            StoreError::InvalidNote => write!(f, "Note is too long"),
+            StoreError::NoFeedback => write!(f, "Add a note or comment first"),
+            StoreError::AlreadySubmitted => write!(f, "Feedback already submitted"),
+            StoreError::NoAgentSession => write!(f, "This report has no linked agent session"),
+            StoreError::AgentUnavailable(reason) => write!(f, "Original agent session unavailable: {reason}"),
             StoreError::Closed => write!(f, "This decision is closed"),
             StoreError::StaleVersion => write!(f, "This report was updated; reload it"),
             StoreError::UnknownChoice => write!(f, "Unknown choice"),
@@ -154,6 +168,10 @@ pub struct RunningItem {
     pub worktree: String,
     pub agent: String,
     pub started_at: String,
+    #[serde(default)]
+    pub revision: u64,
+    #[serde(default)]
+    pub draft_text: String,
 }
 
 /// A marker older than this is an agent that stopped without publishing; it is hidden, not shown forever.
@@ -174,10 +192,20 @@ pub struct ReportMeta {
     pub created_at: String,
     pub version: String,
     pub run: Option<String>,
+    pub agent_session: Option<AgentSession>,
     pub open: bool,
     pub chosen: bool,
     /// Filled by the `list_reports` command from the app state; the store itself does not know it.
     pub read: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all(serialize = "camelCase"))]
+pub struct AgentSession {
+    pub terminal_handle: String,
+    pub terminal_incarnation: String,
+    pub worktree_id: String,
+    pub thread_id: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -187,6 +215,59 @@ pub struct ReportDetail {
     pub page: serde_json::Value,
     pub dir: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentAnchor {
+    pub target: String,
+    pub start: usize,
+    pub end: usize,
+    pub quote: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportComment {
+    pub id: String,
+    pub version: String,
+    pub anchor: CommentAnchor,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanNote {
+    pub version: String,
+    pub body: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackSnapshot {
+    pub version: String,
+    pub note_updated_at: Option<String>,
+    pub comment_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackReceipt {
+    pub snapshot: FeedbackSnapshot,
+    pub sent_at: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackStatus {
+    pub available: bool,
+    pub submitted: bool,
+    pub has_feedback: bool,
+    pub reason: Option<String>,
+}
+
+static COMMENTS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[derive(Deserialize)]
 struct RawMeta {
@@ -205,6 +286,8 @@ struct RawMeta {
     version: String,
     #[serde(default)]
     run: Option<String>,
+    #[serde(default)]
+    agent_session: Option<AgentSession>,
 }
 
 /// Transport fields are tagged on disk and flattened into the frontend contract.
@@ -329,7 +412,7 @@ impl Store {
         Ok(self.projects_dir().join(project_id))
     }
 
-    fn report_dir(&self, project_id: &str, report_id: &str) -> Result<PathBuf, StoreError> {
+    pub(crate) fn report_dir(&self, project_id: &str, report_id: &str) -> Result<PathBuf, StoreError> {
         check_id(report_id)?;
         Ok(self.project_dir(project_id)?.join("reports").join(report_id))
     }
@@ -409,6 +492,7 @@ impl Store {
                 created_at: raw.created_at.clone(),
                 version: raw.version.clone(),
                 run: raw.run.clone(),
+                agent_session: raw.agent_session.clone(),
                 read: false,
             })
             .collect();
@@ -483,6 +567,164 @@ impl Store {
         Ok(ReportDetail { meta, page, dir: dir.to_string_lossy().into_owned() })
     }
 
+    pub fn list_comments(&self, project_id: &str, report_id: &str) -> Result<Vec<ReportComment>, StoreError> {
+        let dir = self.report_dir(project_id, report_id)?;
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" {
+            return Err(StoreError::NotAPlan);
+        }
+        let text = match fs::read_to_string(dir.join("comments.jsonl")) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(text.lines().filter_map(|line| serde_json::from_str::<ReportComment>(line).ok())
+            .filter(|comment| comment.version == meta.version).collect())
+    }
+
+    pub fn get_plan_note(&self, project_id: &str, report_id: &str) -> Result<Option<PlanNote>, StoreError> {
+        let dir = self.report_dir(project_id, report_id)?;
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
+        let source = match fs::read_to_string(dir.join("note.json")) {
+            Ok(source) => source,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let note: PlanNote = serde_json::from_str(&source).map_err(|error| StoreError::Io(error.to_string()))?;
+        Ok((note.version == meta.version).then_some(note))
+    }
+
+    pub fn save_plan_note(&self, project_id: &str, report_id: &str, version: &str, body: &str) -> Result<Option<PlanNote>, StoreError> {
+        let _guard = COMMENTS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let dir = self.report_dir(project_id, report_id)?;
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
+        if meta.version != version { return Err(StoreError::StaleVersion); }
+        let body = body.trim();
+        if body.len() > 20_000 { return Err(StoreError::InvalidNote); }
+        let path = dir.join("note.json");
+        if body.is_empty() {
+            match fs::remove_file(path) {
+                Ok(()) => {},
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {},
+                Err(error) => return Err(error.into()),
+            }
+            return Ok(None);
+        }
+        let now = chrono::Utc::now();
+        let note = PlanNote {
+            version: meta.version,
+            body: body.to_string(),
+            updated_at: now.to_rfc3339_opts(chrono::SecondsFormat::Micros, false),
+        };
+        let encoded = serde_json::to_vec(&note).map_err(|error| StoreError::Io(error.to_string()))?;
+        let temp = dir.join(format!(".note-{}-{}.tmp", std::process::id(), now.timestamp_nanos_opt().unwrap_or_default()));
+        let result = (|| -> io::Result<()> {
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            file.write_all(&encoded)?;
+            file.sync_all()?;
+            fs::rename(&temp, &path)
+        })();
+        if result.is_err() { let _ = fs::remove_file(&temp); }
+        result.map_err(StoreError::from)?;
+        Ok(Some(note))
+    }
+
+    pub fn feedback_snapshot(&self, project_id: &str, report_id: &str) -> Result<(FeedbackSnapshot, Option<PlanNote>, Vec<ReportComment>), StoreError> {
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
+        let note = self.get_plan_note(project_id, report_id)?;
+        let comments = self.list_comments(project_id, report_id)?;
+        let snapshot = FeedbackSnapshot {
+            version: meta.version,
+            note_updated_at: note.as_ref().map(|item| item.updated_at.clone()),
+            comment_ids: comments.iter().map(|item| item.id.clone()).collect(),
+        };
+        Ok((snapshot, note, comments))
+    }
+
+    pub fn feedback_receipt(&self, project_id: &str, report_id: &str) -> Result<Option<FeedbackReceipt>, StoreError> {
+        let dir = self.report_dir(project_id, report_id)?;
+        match fs::read_to_string(dir.join("feedback.json")) {
+            Ok(source) => serde_json::from_str(&source).map(Some).map_err(|error| StoreError::Io(error.to_string())),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn save_feedback_receipt(&self, project_id: &str, report_id: &str, receipt: &FeedbackReceipt) -> Result<(), StoreError> {
+        let dir = self.report_dir(project_id, report_id)?;
+        let data = serde_json::to_vec(receipt).map_err(|error| StoreError::Io(error.to_string()))?;
+        let temp = dir.join(format!(".feedback-{}-{}.tmp", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        let result = (|| -> io::Result<()> {
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            file.write_all(&data)?;
+            file.sync_all()?;
+            fs::rename(&temp, dir.join("feedback.json"))
+        })();
+        if result.is_err() { let _ = fs::remove_file(&temp); }
+        result.map_err(StoreError::from)
+    }
+
+    pub fn add_comment(&self, project_id: &str, report_id: &str, version: &str, anchor: CommentAnchor, body: &str) -> Result<ReportComment, StoreError> {
+        let _guard = COMMENTS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let dir = self.report_dir(project_id, report_id)?;
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" {
+            return Err(StoreError::NotAPlan);
+        }
+        if meta.version != version {
+            return Err(StoreError::StaleVersion);
+        }
+        let body = body.trim();
+        if body.is_empty() || body.len() > 20_000 || anchor.quote.is_empty() || anchor.quote.len() > 10_000
+            || anchor.start >= anchor.end || anchor.end > 1_000_000
+            || anchor.target.len() > 80 || !anchor.target.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+            return Err(StoreError::InvalidComment);
+        }
+        static NEXT_COMMENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now = chrono::Utc::now();
+        let comment = ReportComment {
+            id: format!("{}-{}-{}", now.timestamp_micros(), std::process::id(), NEXT_COMMENT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
+            version: meta.version,
+            anchor,
+            body: body.to_string(),
+            created_at: now.to_rfc3339_opts(chrono::SecondsFormat::Micros, false),
+        };
+        let mut file = fs::OpenOptions::new().create(true).append(true).open(dir.join("comments.jsonl"))?;
+        file.write_all(format!("{}\n", serde_json::to_string(&comment).map_err(|e| StoreError::Io(e.to_string()))?).as_bytes())?;
+        Ok(comment)
+    }
+
+    pub fn delete_comment(&self, project_id: &str, report_id: &str, version: &str, comment_id: &str) -> Result<(), StoreError> {
+        let _guard = COMMENTS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        check_id(comment_id)?;
+        let dir = self.report_dir(project_id, report_id)?;
+        let meta = self.find_meta(project_id, report_id)?;
+        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
+        if meta.version != version { return Err(StoreError::StaleVersion); }
+        let path = dir.join("comments.jsonl");
+        let source = fs::read_to_string(&path)?;
+        let mut found = false;
+        let remaining: Vec<&str> = source.lines().filter(|line| {
+            let matches = serde_json::from_str::<ReportComment>(line).ok()
+                .is_some_and(|comment| comment.id == comment_id && comment.version == version);
+            found |= matches;
+            !matches
+        }).collect();
+        if !found { return Err(StoreError::NotFound); }
+        let temp = dir.join(format!(".comments-{}-{}.tmp", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        let result = (|| -> io::Result<()> {
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            for line in remaining { file.write_all(line.as_bytes())?; file.write_all(b"\n")?; }
+            file.sync_all()?;
+            fs::rename(&temp, &path)
+        })();
+        if result.is_err() { let _ = fs::remove_file(&temp); }
+        result.map_err(StoreError::from)
+    }
+
     pub fn submit_choice(&self, project_id: &str, report_id: &str, version: &str, choice: &str) -> Result<(), StoreError> {
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
@@ -504,6 +746,9 @@ impl Store {
         if !known {
             return Err(StoreError::UnknownChoice);
         }
+        if self.latest_choice(project_id, report_id, version)?.as_deref() == Some(choice) {
+            return Ok(());
+        }
         let event = serde_json::json!({
             "version": meta.version,
             "title": meta.title,
@@ -513,6 +758,18 @@ impl Store {
         let mut file = fs::OpenOptions::new().create(true).append(true).open(dir.join("events.jsonl"))?;
         file.write_all(format!("{event}\n").as_bytes())?;
         Ok(())
+    }
+
+    pub fn latest_choice(&self, project_id: &str, report_id: &str, version: &str) -> Result<Option<String>, StoreError> {
+        let path = self.report_dir(project_id, report_id)?.join("events.jsonl");
+        let source = match fs::read_to_string(path) {
+            Ok(source) => source,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(source.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter(|event| event.get("version").and_then(|value| value.as_str()) == Some(version))
+            .filter_map(|event| event.get("choice").and_then(|value| value.as_str()).map(str::to_owned)).last())
     }
 
     pub fn delete_report(&self, project_id: &str, report_id: &str) -> Result<(), StoreError> {
@@ -581,11 +838,11 @@ impl Store {
     }
 
     /// `(project_id, run_id, started_at)` of every shown working marker, so the watcher can tell when they change.
-    pub fn all_running(&self) -> BTreeSet<(String, String, String)> {
+    pub fn all_running(&self) -> BTreeSet<(String, String, String, u64)> {
         self.project_ids()
             .into_iter()
             .flat_map(|p| self.list_running(&p).unwrap_or_default())
-            .map(|r| (r.project_id, r.id, r.started_at))
+            .map(|r| (r.project_id, r.id, r.started_at, r.revision))
             .collect()
     }
 
@@ -696,6 +953,44 @@ mod tests {
             page["options"] = json!([{"id": "a"}, {"id": "b"}]);
         }
         fs::write(dir.join("page.json"), page.to_string()).unwrap();
+    }
+
+    #[test]
+    fn plan_comments_persist_and_reject_stale_or_invalid_input() {
+        let (_tmp, store) = store();
+        add_project(&store, "p1", "alpha", "/r/.git", None);
+        add_report(&store, "p1", "plan1", "handoff", "/w", "v1");
+        let anchor = CommentAnchor { target: "summary".into(), start: 0, end: 4, quote: "Plan".into() };
+        assert!(store.list_comments("p1", "plan1").unwrap().is_empty());
+        assert_eq!(store.add_comment("p1", "plan1", "old", anchor.clone(), "please clarify").unwrap_err(), StoreError::StaleVersion);
+        assert_eq!(store.add_comment("p1", "plan1", "v1", anchor.clone(), " ").unwrap_err(), StoreError::InvalidComment);
+        let saved = store.add_comment("p1", "plan1", "v1", anchor, " please clarify ").unwrap();
+        assert_eq!(saved.body, "please clarify");
+        assert_eq!(store.list_comments("p1", "plan1").unwrap(), vec![saved.clone()]);
+        let second = store.add_comment("p1", "plan1", "v1", CommentAnchor { target: "summary".into(), start: 5, end: 9, quote: "next".into() }, "keep this").unwrap();
+        assert_eq!(store.delete_comment("p1", "plan1", "old", &saved.id), Err(StoreError::StaleVersion));
+        assert_eq!(store.delete_comment("p1", "plan1", "v1", "missing"), Err(StoreError::NotFound));
+        store.delete_comment("p1", "plan1", "v1", &saved.id).unwrap();
+        assert_eq!(store.list_comments("p1", "plan1").unwrap(), vec![second]);
+        assert_eq!(store.delete_comment("p1", "plan1", "v1", &saved.id), Err(StoreError::NotFound));
+        add_report(&store, "p1", "choice", "decision", "/w", "v2");
+        assert_eq!(store.list_comments("p1", "choice").unwrap_err(), StoreError::NotAPlan);
+    }
+
+    #[test]
+    fn plan_note_can_be_saved_edited_and_cleared() {
+        let (_tmp, store) = store();
+        add_project(&store, "p1", "alpha", "/r/.git", None);
+        add_report(&store, "p1", "plan1", "handoff", "/w", "v1");
+        assert_eq!(store.get_plan_note("p1", "plan1").unwrap(), None);
+        assert_eq!(store.save_plan_note("p1", "plan1", "old", "text").unwrap_err(), StoreError::StaleVersion);
+        let first = store.save_plan_note("p1", "plan1", "v1", " First note ").unwrap().unwrap();
+        assert_eq!(first.body, "First note");
+        assert_eq!(store.get_plan_note("p1", "plan1").unwrap(), Some(first));
+        let second = store.save_plan_note("p1", "plan1", "v1", "Updated note").unwrap().unwrap();
+        assert_eq!(store.get_plan_note("p1", "plan1").unwrap(), Some(second));
+        assert_eq!(store.save_plan_note("p1", "plan1", "v1", " ").unwrap(), None);
+        assert_eq!(store.get_plan_note("p1", "plan1").unwrap(), None);
     }
 
     fn add_running(s: &Store, project: &str, id: &str, started: &str) -> PathBuf {
@@ -852,7 +1147,11 @@ mod tests {
         let (_d, s) = store();
         add_project(&s, "p1", "alpha", "/r/.git", None);
         add_running(&s, "p1", "older", "2026-11-06T10:00:00+00:00");
-        add_running(&s, "p1", "newer", "2026-11-06T11:00:00+00:00");
+        let newer = add_running(&s, "p1", "newer", "2026-11-06T11:00:00+00:00");
+        let mut draft: serde_json::Value = serde_json::from_str(&fs::read_to_string(&newer).unwrap()).unwrap();
+        draft["revision"] = json!(2);
+        draft["draft_text"] = json!("First line\nSecond line");
+        fs::write(&newer, draft.to_string()).unwrap();
         let stale = add_running(&s, "p1", "stale", "2026-11-06T12:00:00+00:00");
         let old = std::time::SystemTime::now() - RUNNING_MAX_AGE - std::time::Duration::from_secs(60);
         fs::File::options().write(true).open(&stale).unwrap().set_modified(old).unwrap();
@@ -867,6 +1166,9 @@ mod tests {
         let json = serde_json::to_value(&s.list_running("p1").unwrap()[0]).unwrap();
         assert_eq!(json["startedAt"], "2026-11-06T11:00:00+00:00");
         assert_eq!(json["projectId"], "p1");
+        assert_eq!(json["revision"], 2);
+        assert_eq!(json["draftText"], "First line\nSecond line");
+        assert!(s.all_running().iter().any(|(_, id, _, revision)| id == "newer" && *revision == 2));
         s.delete_running("p1", "newer").unwrap();
         s.delete_running("p1", "newer").unwrap(); // already gone is fine
         assert_eq!(s.list_running("p1").unwrap().len(), 1);

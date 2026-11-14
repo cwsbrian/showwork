@@ -3,6 +3,7 @@
 
 import argparse
 from datetime import datetime, timezone
+import difflib
 import hashlib
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -59,24 +60,57 @@ def line_number(value):
 
 
 def attach_code(project, files):
-    """Fill in each file's code from the project when the page did not include it."""
+    """Show Git changes for changed files, or current code when there is no diff."""
     root = Path(project).resolve()
+    git_root = store.run_git(root, "rev-parse", "--show-toplevel")
     total = 0
     for item in files:
         if "code" not in item:
             path = (root / item["path"]).resolve()
-            if not path.is_relative_to(root) or not path.is_file():
+            if not path.is_relative_to(root):
                 raise ValueError(f"File to review not found in the project: {item['path']}")
             # Compare case-insensitively: .GIT/config and .ENV are the same files on macOS.
             if (any(part.casefold() == ".git" for part in path.relative_to(root).parts)
                     or path.name.casefold().startswith(".env")):
                 raise ValueError(f"Refusing to show a git or environment file: {item['path']}")
-            if path.stat().st_size > MAX_FILE:
+            if path.is_file() and path.stat().st_size > MAX_FILE:
                 raise ValueError(f"{item['path']} is too large; pass lines or a code excerpt")
-            try:
-                code = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
+            relative = path.relative_to(root).as_posix()
+            code = None
+            if git_root and "lines" not in item and item.get("diff") is not False:
+                result = subprocess.run(
+                    ["git", "-C", str(root), "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", "HEAD", "--", relative],
+                    capture_output=True, timeout=5,
+                )
+                if result.returncode == 0 and result.stdout:
+                    try:
+                        code = result.stdout.decode("utf-8")
+                    except UnicodeDecodeError:
+                        raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
+                    if "Binary files " in code or "GIT binary patch" in code:
+                        raise ValueError(f"{item['path']} is not a UTF-8 text file")
+                elif path.is_file() and store.run_git(root, "ls-files", "--error-unmatch", "--", relative) is None:
+                    try:
+                        current = path.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
+                        raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
+                    if current:
+                        changes = difflib.unified_diff([], current.splitlines(), fromfile=f"a/{relative}", tofile=f"b/{relative}", lineterm="")
+                        code = f"diff --git a/{relative} b/{relative}\nnew file mode 100644\n" + "\n".join(changes)
+                if code:
+                    if len(code.encode("utf-8")) > MAX_FILE:
+                        raise ValueError(f"{item['path']} diff is too large; pass a smaller diff excerpt")
+                    item["code"] = code
+                    item["diff"] = True
+            if code is None:
+                if item.get("diff") is True:
+                    raise ValueError(f"No Git diff for {item['path']}; provide a diff or omit diff: true")
+                if not path.is_file():
+                    raise ValueError(f"File to review not found in the project: {item['path']}")
+                try:
+                    code = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    raise ValueError(f"{item['path']} is not a UTF-8 text file") from None
             if "lines" in item:
                 first, last = item.pop("lines")
                 rows = code.splitlines()
@@ -162,21 +196,23 @@ def validate(page, report_type="result"):
     return page
 
 
-def open_app():
-    """Ask the desktop app to refresh in the background; never raises."""
+def open_app(foreground=False):
+    """Open Showwork, raising its window for an explicit Showwork command."""
     if os.environ.get("SHOWWORK_NO_APP") == "1" or sys.platform != "darwin":
         return "disabled"
     if os.environ.get("SHOWWORK_STORE"):
         return "disabled"  # the app reads only the default store, so a custom store needs the browser
+    if not foreground:
+        try:
+            check = subprocess.run(["osascript", "-e", 'application id "dev.showwork.app" is running'],
+                                   capture_output=True, text=True, timeout=10)
+            if check.returncode == 0 and check.stdout.strip() == "true":
+                return "opened"  # the running app's file watcher picks up the report
+        except (OSError, subprocess.SubprocessError):
+            pass
     try:
-        check = subprocess.run(["osascript", "-e", 'application id "dev.showwork.app" is running'],
-                               capture_output=True, text=True, timeout=10)
-        if check.returncode == 0 and check.stdout.strip() == "true":
-            return "opened"  # the running app's file watcher picks up the report; do not raise its window
-    except (OSError, subprocess.SubprocessError):
-        pass
-    try:
-        result = subprocess.run(["open", "-g", "-a", "Showwork", "--args", "--background"],
+        command = ["open", "-a", "Showwork"] if foreground else ["open", "-g", "-a", "Showwork", "--args", "--background"]
+        result = subprocess.run(command,
                                 capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return "missing"
@@ -328,7 +364,8 @@ class Handler(BaseHTTPRequestHandler):
             if data.get("choice") not in [item["id"] for item in page["options"]]:
                 raise ValueError("Not a current visual choice")
             store.append_event(meta, data["choice"])
-            self.respond(200, {"recorded": True, "choice": data["choice"]})
+            delivery = store.deliver_decision(meta, page, data["choice"])
+            self.respond(200, {"recorded": True, "choice": data["choice"], **delivery})
         except (OSError, ValueError, KeyError, TypeError):
             self.respond(400, {"error": "Invalid choice"})
 
@@ -336,14 +373,17 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     sub = cli.add_subparsers(dest="action", required=True)
-    for name in ["path", "start", "stop", "serve", "publish", "events"]:
+    for name in ["path", "start", "progress", "stop", "serve", "publish", "events", "comments"]:
         command = sub.add_parser(name)
         command.add_argument("--project", required=True, type=Path)
-        if name in ("start", "stop"):
+        if name in ("start", "progress", "stop"):
             command.add_argument("--type", choices=REPORT_TYPES, default="result")
+        if name == "progress":
+            command.add_argument("--text", required=True)
         if name == "start":
             command.add_argument("--agent", choices=["claude", "codex"])
             command.add_argument("--title")
+            command.add_argument("--require-app", action="store_true")
         if name == "serve":
             command.add_argument("--port", type=int, default=0)
             command.add_argument("--open", action="store_true")
@@ -351,7 +391,8 @@ def main():
             command.add_argument("--file", required=True, type=Path)
             command.add_argument("--type", choices=REPORT_TYPES)
             command.add_argument("--agent", choices=["claude", "codex"])
-        if name == "events":
+            command.add_argument("--require-app", action="store_true")
+        if name in ("events", "comments"):
             command.add_argument("--report")
     browser_cmd = sub.add_parser("browser")
     browser_sub = browser_cmd.add_subparsers(dest="browser_action", required=True)
@@ -361,6 +402,7 @@ def main():
     browser_open.add_argument("--title")
     browser_open.add_argument("--width", type=int, default=1280)
     browser_open.add_argument("--height", type=int, default=800)
+    browser_open.add_argument("--require-app", action="store_true")
     browser_close = browser_sub.add_parser("close")
     browser_close.add_argument("--project", required=True, type=Path)
     browser_close.add_argument("--session", required=True)
@@ -372,6 +414,7 @@ def main():
         if action == "open":
             command.add_argument("--udid", required=True)
             command.add_argument("--title")
+            command.add_argument("--require-app", action="store_true")
         else:
             command.add_argument("--session", required=True)
     args = cli.parse_args()
@@ -383,19 +426,26 @@ def main():
             root.mkdir(exist_ok=True)
             print(root)
         elif args.action == "start":
+            app = open_app(foreground=args.require_app)
+            if args.require_app and app != "opened":
+                raise ValueError("Showwork app is unavailable; an in-app task cannot start")
             store.cleanup_sessions(store.project_identity(args.project)["id"])
             root = directory(args.project)
             root.mkdir(exist_ok=True)
             run = store.start_run(args.project, args.type, store.detect_agent(args.agent), args.title)
             store.cleanup_sessions(store.project_identity(args.project)["id"])
-            print(json.dumps({"directory": str(root), "run": run["id"], "type": run["type"], "app": open_app()}))
+            print(json.dumps({"directory": str(root), "run": run["id"], "type": run["type"], "app": app}))
         elif args.action == "stop":
             identity = store.project_identity(args.project)
             run_id = store.finish_run(identity["id"], store.worktree_key(args.project), args.type)
             store.cleanup_sessions(identity["id"], run_id)
             print(json.dumps({"stopped": args.type}))
+        elif args.action == "progress":
+            print(json.dumps(store.append_draft_text(args.project, args.type, args.text)))
         elif args.action == "simulator":
             if args.simulator_action == "open":
+                if args.require_app and open_app(foreground=True) != "opened":
+                    raise ValueError("Showwork app is unavailable; the simulator must appear in the app")
                 session = ios_simulator.open_simulator(args.project, args.udid, args.title)
                 print(json.dumps({"session": session["id"], "run": session["run"], "endpoint": f"http://127.0.0.1:{session['port']}"}))
             else:
@@ -403,6 +453,8 @@ def main():
                 print(json.dumps({"closed": args.session}))
         elif args.action == "browser":
             if args.browser_action == "open":
+                if args.require_app and open_app(foreground=True) != "opened":
+                    raise ValueError("Showwork app is unavailable; the browser must appear in the app")
                 session = browser.open_browser(args.project, args.url, args.title, args.width, args.height)
                 print(json.dumps({"session": session["id"], "run": session["run"],
                                   "cdp": f"http://127.0.0.1:{session['port']}", "ws": session["ws"]}))
@@ -411,10 +463,13 @@ def main():
                 browser.close_browser(identity["id"], args.session)
                 print(json.dumps({"closed": args.session}))
         elif args.action == "publish":
+            app = open_app(foreground=args.require_app)
+            if args.require_app and app != "opened":
+                raise ValueError("Showwork app is unavailable; the report must appear in the app")
             page = publish(args.project, args.file, args.type, args.agent)
             meta = page["report"]
             print(json.dumps({"published": page["version"], "mode": page["mode"], "report": meta["id"],
-                              "project": meta["project_id"], "path": str(store.report_dir(meta)), "app": open_app()}))
+                              "project": meta["project_id"], "path": str(store.report_dir(meta)), "app": app}))
         elif args.action == "events":
             if args.report:
                 meta = next((item for item in worktree_reports(args.project) if item["id"] == args.report), None)
@@ -425,6 +480,17 @@ def main():
             else:
                 current = [item for item in store.read_events(meta) if item.get("version") == meta["version"]]
                 print(json.dumps({"report": meta["id"], "version": meta["version"], "open": store.is_open(meta), "events": current}, ensure_ascii=False))
+        elif args.action == "comments":
+            if args.report:
+                meta = next((item for item in worktree_reports(args.project) if item["id"] == args.report), None)
+            else:
+                meta = next((item for item in reversed(worktree_reports(args.project))
+                             if item.get("type") == "plan" and item.get("mode") == "handoff"), None)
+            if meta is None:
+                print(json.dumps({"report": None, "version": None, "note": None, "comments": []}))
+            else:
+                print(json.dumps({"report": meta["id"], "version": meta["version"],
+                                  "note": store.read_plan_note(meta), "comments": store.read_comments(meta)}, ensure_ascii=False))
         else:
             with CompanionServer(args.project, args.port) as server:
                 info = {"url": server.url, "pid": os.getpid(), "project": str(args.project.resolve()), "directory": str(server.root)}

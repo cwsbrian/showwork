@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from importlib.util import module_from_spec, spec_from_file_location
 import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -8,7 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills" / "showwork" / "scripts"
@@ -34,6 +35,30 @@ class StoreTests(unittest.TestCase):
         patcher = patch.dict(os.environ, {"SHOWWORK_STORE": str(self.tmp / "store")})
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def test_decision_delivery_uses_original_terminal_and_deduplicates(self):
+        meta = {"id": "r1", "project_id": "p1", "version": "v1", "title": "Layout", "worktree": "/w",
+                "agent": "codex", "agent_session": {"terminal_handle": "term_123", "terminal_incarnation": "inc-1", "worktree_id": "wt-1"}}
+        folder = STORE.report_dir(meta)
+        folder.mkdir(parents=True)
+        page = {"question": "Which layout?", "options": [{"id": "grid", "title": "Grid", "body": "Two columns"}]}
+        shown = Mock(returncode=0, stdout=json.dumps({"result": {"terminal": {"handle": "term_123", "incarnationId": "inc-1",
+            "worktreeId": "wt-1", "worktreePath": "/w", "agentIdentity": "codex", "connected": True, "writable": True}}}))
+        sent = Mock(returncode=0, stdout=json.dumps({"result": {"send": {"accepted": True}}}))
+        with patch.dict(os.environ, {"SHOWWORK_ORCA_CLI": "/fake/orca"}), patch.object(STORE.subprocess, "run", side_effect=[shown, sent]) as run:
+            result = STORE.deliver_decision(meta, page, "grid")
+        self.assertTrue(result["sent"])
+        self.assertIn("Question: Which layout?\nSelected option: Grid\nDetails: Two columns", run.call_args_list[1].args[0][6])
+        with patch.object(STORE.subprocess, "run") as run:
+            self.assertTrue(STORE.deliver_decision(meta, page, "grid")["sent"])
+            run.assert_not_called()
+        (folder / "decision-delivery.json").unlink()
+        changed = Mock(returncode=0, stdout=json.dumps({"result": {"terminal": {"handle": "term_123", "incarnationId": "new"}}}))
+        with patch.dict(os.environ, {"SHOWWORK_ORCA_CLI": "/fake/orca"}), patch.object(STORE.subprocess, "run", return_value=changed) as run:
+            result = STORE.deliver_decision(meta, page, "grid")
+        self.assertFalse(result["sent"])
+        self.assertTrue(result["retryable"])
+        self.assertEqual(run.call_count, 1)
 
     def test_each_start_gets_a_new_run_and_replaces_the_same_kind(self):
         repo = self.repo()
@@ -285,6 +310,32 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(STORE.detect_agent(None), "codex")
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(STORE.detect_agent(None), "unknown")
+
+    def test_agent_session_is_captured_and_carried_into_report(self):
+        repo = self.repo()
+        session = {"terminal_handle": "term_123", "terminal_incarnation": "inc-1",
+                   "worktree_id": "repo::" + str(repo), "thread_id": "thread-1"}
+        with patch.object(STORE, "agent_session", return_value=session):
+            run = STORE.start_run(repo, "plan", "codex")
+            meta = STORE.save_report(repo, page(), [], "plan", "codex")
+        self.assertEqual(run["agent_session"], session)
+        self.assertEqual(meta["agent_session"], session)
+
+    def test_agent_session_requires_exact_orca_terminal(self):
+        from subprocess import CompletedProcess
+        handle = "term_12345678-1234-1234-1234-123456789abc"
+        worktree_id = "repo::" + str(self.tmp)
+        terminal = {"ok": True, "result": {"terminal": {
+            "handle": handle, "worktreeId": worktree_id, "worktreePath": str(self.tmp),
+            "agentIdentity": "codex", "incarnationId": "inc-1"}}}
+        env = {"ORCA_TERMINAL_HANDLE": handle, "ORCA_WORKTREE_ID": worktree_id,
+               "ORCA_CLI_BIN_DIR": str(self.tmp), "CODEX_SESSION_ID": "thread-1"}
+        with patch.dict(os.environ, env), patch.object(STORE, "worktree_key", return_value=str(self.tmp)), \
+             patch.object(STORE.subprocess, "run", return_value=CompletedProcess([], 0, json.dumps(terminal))):
+            self.assertEqual(STORE.agent_session(self.tmp, "codex")["thread_id"], "thread-1")
+            terminal["result"]["terminal"]["agentIdentity"] = "claude"
+            with patch.object(STORE.subprocess, "run", return_value=CompletedProcess([], 0, json.dumps(terminal))):
+                self.assertIsNone(STORE.agent_session(self.tmp, "codex"))
 
 
 if __name__ == "__main__":

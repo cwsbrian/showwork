@@ -6,6 +6,7 @@ macro_rules! log {
 }
 
 pub mod notify_mac;
+pub mod feedback;
 pub mod state;
 pub mod store;
 pub mod watch;
@@ -18,7 +19,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
 use state::{UiState, View};
-use store::{ProjectSummary, ReportDetail, ReportMeta, RunningItem, SessionItem, Store};
+use store::{CommentAnchor, FeedbackStatus, PlanNote, ProjectSummary, ReportComment, ReportDetail, ReportMeta, RunningItem, SessionItem, Store};
 
 type Ui = Mutex<UiState>;
 
@@ -53,6 +54,11 @@ fn err(error: impl ToString) -> String {
 }
 
 // ---- commands ----
+
+#[tauri::command]
+fn app_revision() -> &'static str {
+    env!("SHOWWORK_BUILD_REVISION")
+}
 
 #[tauri::command]
 fn list_projects(store: State<Store>, ui: State<Ui>) -> Result<Vec<ProjectSummary>, String> {
@@ -101,8 +107,48 @@ fn get_report(store: State<Store>, project_id: String, report_id: String) -> Res
 }
 
 #[tauri::command]
-fn submit_choice(store: State<Store>, project_id: String, report_id: String, version: String, choice: String) -> Result<(), String> {
-    store.submit_choice(&project_id, &report_id, &version, &choice).map_err(err)
+fn list_comments(store: State<Store>, project_id: String, report_id: String) -> Result<Vec<ReportComment>, String> {
+    store.list_comments(&project_id, &report_id).map_err(err)
+}
+
+#[tauri::command]
+fn add_comment(store: State<Store>, project_id: String, report_id: String, version: String, anchor: CommentAnchor, body: String) -> Result<ReportComment, String> {
+    store.add_comment(&project_id, &report_id, &version, anchor, &body).map_err(err)
+}
+
+#[tauri::command]
+fn delete_comment(store: State<Store>, project_id: String, report_id: String, version: String, comment_id: String) -> Result<(), String> {
+    store.delete_comment(&project_id, &report_id, &version, &comment_id).map_err(err)
+}
+
+#[tauri::command]
+fn get_plan_note(store: State<Store>, project_id: String, report_id: String) -> Result<Option<PlanNote>, String> {
+    store.get_plan_note(&project_id, &report_id).map_err(err)
+}
+
+#[tauri::command]
+fn save_plan_note(store: State<Store>, project_id: String, report_id: String, version: String, body: String) -> Result<Option<PlanNote>, String> {
+    store.save_plan_note(&project_id, &report_id, &version, &body).map_err(err)
+}
+
+#[tauri::command]
+fn feedback_status(store: State<Store>, project_id: String, report_id: String) -> Result<FeedbackStatus, String> {
+    feedback::status(&store, &project_id, &report_id).map_err(err)
+}
+
+#[tauri::command]
+fn agent_session_status(store: State<Store>, project_id: String, report_id: String) -> Result<feedback::SessionStatus, String> {
+    feedback::session_status(&store, &project_id, &report_id).map_err(err)
+}
+
+#[tauri::command]
+fn submit_feedback(store: State<Store>, project_id: String, report_id: String, version: String) -> Result<(), String> {
+    feedback::submit(&store, &project_id, &report_id, &version).map_err(err)
+}
+
+#[tauri::command]
+fn submit_choice(store: State<Store>, project_id: String, report_id: String, version: String, choice: String) -> Result<feedback::DecisionDelivery, String> {
+    feedback::submit_choice(&store, &project_id, &report_id, &version, &choice).map_err(err)
 }
 
 #[tauri::command]
@@ -253,7 +299,9 @@ pub fn run() {
     let launched = state::load(&root);
     // Read before building: the launch activation happens before `setup` runs.
     let background = std::env::args().any(|arg| arg == "--background");
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
     // A `--background` launch (agent publish with the app closed) must not take focus. With `false`
     // macOS activates the app only when no other app is active; a normal launch keeps the default.
     #[cfg(target_os = "macos")]
@@ -263,6 +311,7 @@ pub fn run() {
         .manage(Mutex::new(launched.clone()))
         .manage(Notified::default())
         .invoke_handler(tauri::generate_handler![
+            app_revision,
             list_projects,
             list_reports,
             list_running,
@@ -271,6 +320,14 @@ pub fn run() {
             list_all_sessions,
             delete_session,
             get_report,
+            list_comments,
+            add_comment,
+            delete_comment,
+            get_plan_note,
+            save_plan_note,
+            feedback_status,
+            agent_session_status,
+            submit_feedback,
             submit_choice,
             mark_read,
             get_state,

@@ -65,7 +65,7 @@ class EvidenceTests(unittest.TestCase):
         result = self.check("import sys; print('runtime output'); print('stderr output', file=sys.stderr)")
         self.assertEqual(result.returncode, 0, result.stderr)
         evidence = self.manifest()["evidence"][0]
-        self.assertEqual(evidence["cwd"], str(self.project))
+        self.assertEqual(evidence["cwd"], str(self.project.resolve()))
         self.assertEqual(evidence["exit_code"], 0)
         self.assertEqual(evidence["command"][0], sys.executable)
         output = (self.run / evidence["path"]).read_text()

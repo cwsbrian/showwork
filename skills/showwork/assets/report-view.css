@@ -27,7 +27,7 @@
     .dots { display:flex; gap:6px; } .dots i { width:10px; height:10px; border-radius:50%; background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
     .editor-bar .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .editor-bar .lang { text-transform:uppercase; letter-spacing:.6px; font-size:11px; }
     button.copy { padding:3px 10px; border-radius:6px; background:#2d333b; color:#d4d8de; font:600 12px system-ui; } button.copy:hover { background:#3a414b; }
-    .code { overflow:auto; max-height:72vh; padding:8px 0; font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size:4; outline:0; } .code:focus-visible { box-shadow:inset 0 0 0 2px #65cdb7; }
+    .code { position:relative; overflow:auto; max-height:72vh; padding:8px 0; font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size:4; outline:0; } .code:focus-visible { box-shadow:inset 0 0 0 2px #65cdb7; }
     .line { display:flex; width:max-content; min-width:100%; min-height:1.65em; } .no { position:sticky; left:0; flex:none; padding:0 14px 0 10px; text-align:right; white-space:pre; color:#636d78; background:#1f2329; user-select:none; }
     .src { white-space:pre; padding-right:28px; } .mark { display:inline-block; width:1.6ch; user-select:none; color:#7d8590; }
     .line.add { background:#1f3a2a; } .line.add .no { background:#1c3326; color:#7cc492; } .line.add .mark { color:#7cc492; }

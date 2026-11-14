@@ -14,7 +14,7 @@ struct Scanner<F, G> {
     store: Store,
     known: BTreeSet<(String, String)>,
     on_new: F,
-    running: BTreeSet<(String, String, String)>,
+    running: BTreeSet<(String, String, String, u64)>,
     sessions: BTreeSet<(String, String, Option<String>)>,
     on_running: G,
 }
@@ -126,6 +126,13 @@ mod tests {
         let run = json!({"id": "r1", "project_id": "p1", "type": "review", "worktree": "/w", "agent": "claude", "started_at": "t"});
         fs::write(running.join("r1.json"), run.to_string()).unwrap();
         rx.recv_timeout(Duration::from_secs(3)).expect("appear fires");
+        while rx.recv_timeout(Duration::from_millis(500)).is_ok() {}
+        let mut updated = run;
+        updated["revision"] = json!(1);
+        updated["draft_text"] = json!("Finding: confirmed");
+        fs::write(running.join(".pending-r1"), updated.to_string()).unwrap();
+        fs::rename(running.join(".pending-r1"), running.join("r1.json")).unwrap();
+        rx.recv_timeout(Duration::from_secs(3)).expect("draft update fires");
         while rx.recv_timeout(Duration::from_millis(500)).is_ok() {}
         fs::remove_file(running.join("r1.json")).unwrap();
         rx.recv_timeout(Duration::from_secs(3)).expect("removal fires");

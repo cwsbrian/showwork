@@ -107,6 +107,32 @@ def detect_agent(explicit):
     return "unknown"
 
 
+def agent_session(project, agent):
+    """Capture the exact Orca terminal that authored this report, when available."""
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE", "")
+    worktree_id = os.environ.get("ORCA_WORKTREE_ID", "")
+    if (not re.fullmatch(r"term_[0-9a-f-]{36}", handle) or not worktree_id
+            or os.path.realpath(worktree_id.rsplit("::", 1)[-1]) != worktree_key(project)):
+        return None
+    binary_dir = os.environ.get("ORCA_CLI_BIN_DIR")
+    executable = str(Path(binary_dir) / "orca") if binary_dir else shutil.which("orca")
+    if not executable:
+        return None
+    try:
+        result = subprocess.run([executable, "terminal", "show", "--terminal", handle, "--json"],
+                                capture_output=True, text=True, timeout=5)
+        terminal = json.loads(result.stdout).get("result", {}).get("terminal", {}) if result.returncode == 0 else {}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if (terminal.get("handle") != handle or terminal.get("worktreeId") != worktree_id
+            or os.path.realpath(terminal.get("worktreePath") or "") != worktree_key(project)
+            or terminal.get("agentIdentity") != agent or not terminal.get("incarnationId")):
+        return None
+    thread_id = (os.environ.get("CODEX_SESSION_ID") or os.environ.get("CODEX_THREAD_ID")) if agent == "codex" else os.environ.get("CLAUDE_SESSION_ID")
+    return {"terminal_handle": handle, "terminal_incarnation": terminal["incarnationId"],
+            "worktree_id": worktree_id, "thread_id": thread_id or None}
+
+
 def new_report_id(now):
     return now.astimezone(timezone.utc).strftime("%Y%m%d-%H%M%S-%f") + "-" + secrets.token_hex(2)
 
@@ -206,6 +232,7 @@ def save_report(project, page, images, report_type, agent):
                 "id": report_id, "project_id": identity["id"], "type": report_type, "mode": page["mode"],
                 "title": page["title"], "branch": state["branch"], "commit": state["commit"],
                 "worktree": worktree, "agent": agent, "run": run["id"] if run else None,
+                "agent_session": (run.get("agent_session") if run else None) or agent_session(project, agent),
                 "created_at": page.get("published_at") or now.isoformat(), "version": page["version"],
             }
             write_json(pending / "page.json", page)
@@ -247,6 +274,30 @@ def current_run(project_id, worktree, report_type):
     return runs[0][1] if runs else None
 
 
+def append_draft_text(project, report_type, text):
+    """Append text to the visible in-progress document without publishing it."""
+    if not isinstance(text, str) or not text:
+        raise ValueError("Draft text must be nonempty")
+    if len(text.encode("utf-8")) > 8192:
+        raise ValueError("Draft text chunk is too long")
+    identity = project_identity(project)
+    worktree = worktree_key(project)
+    with simulator_lifecycle_lock():
+        matches = matching_runs(identity["id"], worktree, report_type)
+        if not matches:
+            raise ValueError("Run companion.py start first")
+        path, run = matches[0]
+        draft = run.get("draft_text", "")
+        if not isinstance(draft, str) or len((draft + text).encode("utf-8")) > 256 * 1024:
+            raise ValueError("Draft is too long")
+        if not path.is_file():
+            raise ValueError("This run is no longer in progress")
+        run["draft_text"] = draft + text
+        run["revision"] = run.get("revision", 0) + 1
+        write_json(path, run)
+        return {"run": run["id"], "revision": run["revision"]}
+
+
 def start_run(project, report_type, agent, title=None):
     with simulator_lifecycle_lock():
         return _start_run(project, report_type, agent, title)
@@ -268,6 +319,7 @@ def _start_run(project, report_type, agent, title=None):
         "id": new_report_id(now), "project_id": identity["id"], "type": report_type, "title": title or None,
         "branch": state["branch"], "worktree": worktree, "agent": agent,
         "started_at": now.isoformat(timespec="seconds"),
+        "agent_session": agent_session(project, agent),
     }
     write_json(running / (run["id"] + ".json"), run)
     for path, old in matching_runs(identity["id"], worktree, report_type):
@@ -378,9 +430,80 @@ def read_events(meta):
     return events
 
 
+def read_comments(meta):
+    try:
+        lines = (report_dir(meta) / "comments.jsonl").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    comments = []
+    for line in lines:
+        try:
+            comment = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(comment, dict) and comment.get("version") == meta["version"]:
+            comments.append(comment)
+    return comments
+
+
+def read_plan_note(meta):
+    try:
+        note = json.loads((report_dir(meta) / "note.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return note if isinstance(note, dict) and note.get("version") == meta["version"] else None
+
+
 def append_event(meta, choice):
+    if next((event.get("choice") for event in reversed(read_events(meta)) if event.get("version") == meta["version"]), None) == choice:
+        return None
     event = {"version": meta["version"], "title": meta["title"], "choice": choice,
              "time": datetime.now(timezone.utc).isoformat()}
     with open(report_dir(meta) / "events.jsonl", "a", encoding="utf-8") as stream:
         stream.write(json.dumps(event, ensure_ascii=False) + "\n")
     return event
+
+
+def deliver_decision(meta, page, choice):
+    """Send a recorded choice to its exact original Orca terminal, if linked."""
+    folder = report_dir(meta)
+    receipt_path = folder / "decision-delivery.json"
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if receipt.get("version") == meta["version"] and receipt.get("choice") == choice:
+            return {"sent": True, "retryable": False, "reason": None}
+    except (OSError, ValueError):
+        pass
+    session = meta.get("agent_session")
+    if not session:
+        return {"sent": False, "retryable": False, "reason": "This report has no linked agent session."}
+    binary_dir = os.environ.get("ORCA_CLI_BIN_DIR")
+    installed = Path("/Applications/Orca.app/Contents/Resources/bin/orca")
+    executable = (os.environ.get("SHOWWORK_ORCA_CLI") or (str(Path(binary_dir) / "orca") if binary_dir else None)
+                  or (str(installed) if sys.platform == "darwin" and installed.is_file() else shutil.which("orca")))
+    if not executable:
+        return {"sent": False, "retryable": True, "reason": "Orca CLI is unavailable."}
+    handle = session.get("terminal_handle", "")
+    try:
+        shown = subprocess.run([executable, "terminal", "show", "--terminal", handle, "--json"], capture_output=True, text=True, timeout=10)
+        terminal = json.loads(shown.stdout).get("result", {}).get("terminal", {}) if shown.returncode == 0 else {}
+        if not (terminal.get("handle") == handle and terminal.get("incarnationId") == session.get("terminal_incarnation")
+                and terminal.get("worktreeId") == session.get("worktree_id")
+                and os.path.realpath(terminal.get("worktreePath") or "") == os.path.realpath(meta["worktree"])
+                and terminal.get("agentIdentity") == meta["agent"] and terminal.get("connected") and terminal.get("writable")):
+            raise ValueError("The original terminal has changed or closed.")
+        option = next(item for item in page["options"] if item["id"] == choice)
+        message = (f"Showwork decision for: {meta['title']}\nReport ID: {meta['id']}\n"
+                   f"Question: {page.get('question', '')}\nSelected option: {option['title']}\n"
+                   f"Details: {option.get('body', '')}\n\nPlease continue this plan using this choice in this session.")
+        if len(message.encode("utf-8")) > 65536:
+            raise ValueError("Choice message is too long.")
+        sent = subprocess.run([executable, "terminal", "send", "--terminal", handle, "--text", message,
+                               "--enter", "--wait-submit", "10", "--json"], capture_output=True, text=True, timeout=20)
+        result = json.loads(sent.stdout) if sent.returncode == 0 else {}
+        if not result.get("result", {}).get("send", {}).get("accepted"):
+            raise ValueError(result.get("error", {}).get("message", "Orca did not accept the message."))
+    except (OSError, subprocess.SubprocessError, ValueError, StopIteration) as error:
+        return {"sent": False, "retryable": True, "reason": str(error)}
+    write_json(receipt_path, {"version": meta["version"], "choice": choice, "sent_at": datetime.now(timezone.utc).isoformat()})
+    return {"sent": True, "retryable": False, "reason": None}

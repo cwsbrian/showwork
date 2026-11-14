@@ -1,0 +1,85 @@
+name: Release Showwork app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: showwork-main-release
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s tests -v
+      - run: npm test
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+      - run: npm ci
+        working-directory: app
+      - name: Set a new app version for this main commit
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re
+          config_path = pathlib.Path('app/src-tauri/tauri.conf.json')
+          config = json.loads(config_path.read_text())
+          major, minor, _ = map(int, config['version'].split('.'))
+          version = f'{major}.{minor}.{os.environ["BUILD_NUMBER"]}'
+          config['version'] = version
+          config_path.write_text(json.dumps(config, indent=2) + '\n')
+          cargo_path = pathlib.Path('app/src-tauri/Cargo.toml')
+          cargo = cargo_path.read_text()
+          cargo = re.sub(r'(?m)^version = "[^"]+"', f'version = "{version}"', cargo, count=1)
+          cargo_path.write_text(cargo)
+          print(f'Building Showwork {version} from {os.environ["GITHUB_SHA"]}')
+          PY
+      - run: npm run build
+        working-directory: app
+      - run: cargo test --lib
+        working-directory: app/src-tauri
+      - name: Check whether this app version is already published
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('app/src-tauri/tauri.conf.json'))['version'])")
+          if gh release view "app-v${version}" >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "App version ${version} is already published; bump the version to ship changes."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: tauri-apps/tauri-action@v1
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        with:
+          projectPath: app
+          tagName: app-v__VERSION__
+          releaseName: Showwork v__VERSION__
+          releaseBody: 'Source commit: ${{ github.sha }}'
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: true
+          args: --target universal-apple-darwin --bundles app,dmg

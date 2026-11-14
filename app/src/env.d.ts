@@ -3,7 +3,7 @@ declare module '@report-view' {
     root: HTMLElement,
     page: any,
     hooks: {
-      submitChoice(choiceId: string): Promise<void>;
+      submitChoice(choiceId: string): Promise<{ sent: boolean; retryable: boolean; reason: string | null }>;
       assetUrl(relativePath: string): string;
       connected(): boolean;
       idPrefix?: string;

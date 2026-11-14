@@ -1,48 +1,46 @@
 ---
 name: showwork-review
-description: Review a software change against its intended behavior, full diff, and evidence, with risk-proportional adversarial checks. Use for Showwork code or implementation reviews; report findings without applying unrequested fixes.
+description: Review a coding session and its change together: user requests, decisions, agent claims, full diff, adversarial cases, and runtime evidence. Publish one prioritized Showwork review only when explicitly invoked.
 disable-model-invocation: true
 ---
 
 # Showwork Review
 
-Use only for an explicitly invoked Showwork command (or as supporting guidance for that command). Ordinary tasks and discussion about this package do not activate Showwork. Keep activation scoped to the invoked task.
+Use only for an explicitly invoked Showwork review command. Ordinary requests and discussion about this package do not activate it. This single review covers the coding session and its resulting change, including adversarial checks. Do not edit production code or apply fixes unless the user asked. Preserve local changes and the user's authorization boundaries.
 
-Report actionable defects and evidence gaps in the requested change. Do not edit production code or apply fixes unless the user authorized fixes. Read repository instructions and preserve local changes. Use the user's language and the repository's review conventions when available.
+Start `companion.py start --project /absolute/project --type review --agent <claude|codex> --require-app` through the [companion guide](../showwork/references/companion.md#show-that-work-started). This is the one public Showwork review workflow. If the Showwork app cannot open, report that limit rather than moving the walkthrough into a separate browser or simulator. Append short, confirmed findings with `progress` as they are validated, and publish one review in the app.
 
-Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
+## Establish the session, change, and rules
 
-Start by running `companion.py start --project /absolute/project --type review --agent <claude|codex>` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report.
+Identify the requested session and change. For an active session, use the conversation and tool results already available. For an earlier or linked session, use its explicit session ID/link and the host's supported read-only history or terminal tools; confirm the session belongs to the intended project/worktree. Do not search unrelated private sessions or pretend a report's stored session ID contains a transcript. If the session record is inaccessible, ask for that record or mark the session part unverified while reviewing the available change. If the session produced no code change, review its requested outcome and evidence, and mark code review not applicable rather than inventing a diff.
 
-## Establish what is being reviewed
+Read the user's original request, later corrections and choices, the agent's commitments, claimed checks, tool results and final handoff. Build a short list of the outcomes the user actually authorized. Resolve apparent conflicts by the latest explicit user direction. A later code change is not automatically proof that an earlier request was handled; trace the request to the implemented behavior and evidence. Keep session observations tied to a message, action or result, not a vague impression of the agent.
 
-- Identify the intended behavior, acceptance criteria, target branch or base, and head or local state. Read the complete relevant diff and added files, then affected callers and existing tests.
-- For a branch or PR review, use the appropriate common ancestor with the intended target when that is the comparison the user requested. Do not silently default to the last commit or compare against an unrelated branch.
-- If the request includes current local changes, cover staged, unstaged, and relevant untracked files. Distinguish pre-existing work from the requested change. Inspect file names before opening unrelated or potentially sensitive generated artifacts.
-- If the base cannot be reliably inferred, state the ambiguity and ask for the missing information while inspecting independent context. State any limits on review coverage.
+Identify the intended behavior, acceptance criteria, target base and reviewed head/local state. For a branch or PR, compare against the appropriate merge base; for local work, include staged, unstaged and relevant untracked files. Read the complete relevant diff, added files, affected callers, contracts and existing tests. Distinguish work in scope from pre-existing defects. If the base or goal cannot be inferred, inspect independent context first, then ask for the missing fact and state the resulting coverage limit.
 
-## Challenge the behavior
+Read applicable `AGENTS.md`, team review rules and human reviewer lessons. When `review-lessons` is installed or the repository requires it, run its `check` mode and perform its concrete checks; do not merely cite a lessons file. Prefer a few scoped invariants tied to affected paths or contracts over generic style rules. Check an apparent rule violation against valid exceptions and unrelated code so the report stays low-noise.
 
-Follow changed execution paths and compare them with the intended outcome. Scale depth to the impact: a copy change needs little scrutiny; permissions, data writes, shared contracts, concurrency, or migrations need concrete failure analysis.
+## Trace, challenge, and validate
 
-Choose plausible failure cases, not a generic checklist. Examples include boundary input, missing or stale state, partial success, repeated actions, conflicting updates, incompatible callers, or a user unable to complete the UI flow. Look for the shared root cause when multiple callers are affected.
+Check the session against the delivered result: missed or only partly implemented requests; unsupported completion or test claims; a user correction that was acknowledged but not applied; unauthorized scope expansion or external side effects; and an important failure hidden by the handoff. Judge these by their effect on the user's outcome. Do not report ordinary exploration, harmless wording or a reasonable implementation choice as a session defect. Separate a wrong claim from a code defect even when both share a root cause.
 
-Run focused, safe checks with existing capabilities when they can confirm a concern. Verify the rendered result for visual claims when a runnable UI is available; distinguish a source-level suspicion from an observed visual defect. Do not create real external side effects simply to reproduce a finding without authorization.
+Follow each changed execution path from entry point through writes, side effects and response. Scale depth to consequence. For high-risk changes, use distinct passes for (1) session intent and repository rules, (2) ordinary bugs and affected callers, and (3) credible adversarial cases such as unauthorized access, stale state, repeated/concurrent actions, partial failure, boundary input, migration/compatibility and recovery. Use independent reviewers only when available and useful for a large or risky change; do not treat multiple opinions as proof.
 
-For web captures, use the [in-app browser](../showwork/references/companion.md#capture-web-pages-in-the-app).
+For every suspected defect, identify a concrete trigger and causal path. Run a focused safe reproduction when practical; check the current source, test result and visual state before reporting it. Confirm that the issue was introduced by the reviewed change or clearly label it as pre-existing. Remove duplicates, style-only comments and speculative concerns without a plausible path. Test success alone does not establish correctness; compare the session's claims and observed evidence against the acceptance criteria and uncovered failure behavior.
 
-Review is a challenge to the implementation's assumptions. Test passing alone is not proof of correctness. Check whether the evidence actually covers the criteria, relevant failure behavior, and the current version of the change.
+Run the affected experience through the Showwork app:
 
-## Report only useful findings
+- **Web:** start the project with its existing dev/test setup, then open and operate the page via `companion.py browser open --project ... --url ... --require-app`. Connect Playwright to that command's CDP endpoint for interactions and screenshots. Do not launch a separate visible or headless browser for the reviewed flow.
+- **iOS:** follow [mobile runtime evidence](references/mobile.md). Build/install the reviewed app on a selected Simulator, attach it with `companion.py simulator open --project ... --udid ... --require-app`, and operate and capture that same device. Do not open Simulator.app as a separate viewing window.
+- **Android:** the current Showwork app has no Android emulator tab. Review source and safe tests, and mark the Android runtime scenario unverified rather than substituting an external emulator window or mobile web viewport.
+- **API/CLI/library:** exercise the affected interface with safe data and record observed outputs; do not invent UI work.
 
-Lead with actionable findings, ordered by practical severity. Each should contain:
+Do not make real purchases, production writes or destructive changes merely to reproduce a finding. If an in-app session or runtime cannot be established, continue source review and other safe checks, then name the exact gap. A screenshot proves only what is visible at capture time; pair it with the steps, logs or tests needed for a behavioral claim.
 
-- A concise title and location, with the narrowest useful file/line reference.
-- The concrete triggering condition and user or system impact.
-- Evidence or a clear causal path, and a minimal direction for a fix when it helps.
+## Report findings first
 
-Do not inflate style preferences, hypothetical risks without a credible path, or missing evidence into confirmed defects. Separate observed defects from unverified criteria or environment limitations. Avoid duplicate findings for the same root cause.
+Order actionable findings by practical severity: P0 urgent, P1 high, P2 normal, P3 low. Give each a stable ID and label its evidence as **session**, **code**, or **both**. For code, give the narrowest useful file/line, trigger, expected versus actual behavior, impact, evidence and minimal fix direction. For a session finding, identify the relevant request/decision and the contradictory action, result or claim with a turn, timestamp or artifact when available; state the practical impact and what remains to be done. Say which claims were reproduced at runtime and which follow from inspected code or transcript. A source-confirmed defect can be actionable even when runtime reproduction is unavailable; do not relabel its cause as unverified merely for lack of a screenshot.
 
-Then summarize the reviewed scope, checks actually performed, and important limitations. If no actionable defect was found, say that within the stated scope; do not equate it with proven acceptance. A blocking criterion lacking evidence belongs in the limitations even when no code defect can be established. Do not silently transition from review into implementation.
+After findings, summarize the reviewed session and revision, requested outcomes covered, checks actually run, relevant coverage gaps and remaining uncertainty. If no actionable defect was found, say so **within the reviewed scope**; do not imply an unavailable transcript or untested criterion passed. Keep blocking criteria without evidence visible as limitations, separate from confirmed defects. Explain in the user's language with clear everyday words, while preserving exact paths, values and technical evidence where needed.
 
-End by publishing a review report with the [companion](../showwork/references/companion.md): `companion.py publish --project /absolute/project --file <json> --type review --agent <claude|codex>`. It shows each finding with severity, location and evidence, the gaps that were not checked, and the finding's code in `files`. `checks` may be omitted. Keep a short summary in chat and say where the report is (the Showwork app if the publish output says `"app": "opened"`, otherwise the `serve` URL).
+Publish a single `mode: "handoff"` report with `companion.py publish --project /absolute/project --file <json> --type review --agent <claude|codex> --require-app`. Lead with combined findings; show a compact request-to-result coverage section, session evidence, runtime checks and relevant code in `files`. Do not publish separate session and adversarial reports. Use `failed` for an observed mismatch, `verified` only for demonstrated behavior, and `unverified` for unrun or inconclusive checks; severity is separate. Inspect the rendered report and attachments in Showwork before saying it was shown. Give a brief chat summary and location, without silently switching to implementation.

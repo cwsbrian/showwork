@@ -31,6 +31,7 @@
         const version = page.version;
         const response = await fetch('/api/choice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({version, choice})});
         if(!response.ok) throw new Error(response.status===409?'The page has changed. Review the latest version.':'Could not save your choice.');
+        return response.json();
       }
     };
     function show(next) {

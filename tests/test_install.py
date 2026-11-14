@@ -15,24 +15,26 @@ SPEC.loader.exec_module(INSTALLER)
 
 
 class InstallTest(unittest.TestCase):
-    def test_upgrade_adds_review_skill_for_both_runtimes_without_replacing_existing_skills(self):
+    def test_upgrade_retires_old_review_skill_for_both_runtimes(self):
         for runtime, folder in [("codex", ".agents"), ("claude", ".claude")]:
             with self.subTest(runtime=runtime), tempfile.TemporaryDirectory() as temporary:
                 project = Path(temporary)
-                previous = tuple(name for name in INSTALLER.SKILLS if name != "showwork-adverial-review")
-                with patch.object(INSTALLER, "SKILLS", previous):
-                    INSTALLER.install(project, runtime=runtime)
+                INSTALLER.install(project, runtime=runtime)
+                old = project / folder / "skills/showwork-adverial-review"
+                old.mkdir()
+                (old / "SKILL.md").write_text("User's old review skill")
                 existing = project / folder / "skills/showwork/SKILL.md"
                 modified = existing.stat().st_mtime_ns
                 self.assertEqual(INSTALLER.install(project, runtime=runtime), 1)
                 self.assertEqual(existing.stat().st_mtime_ns, modified)
-                review = project / folder / "skills/showwork-adverial-review"
-                self.assertEqual(INSTALLER.contents(review), INSTALLER.contents(ROOT / "skills/showwork-adverial-review"))
+                self.assertFalse(old.exists())
+                backups = list((project / folder / "showwork-backups").glob("update-*/showwork-adverial-review/SKILL.md"))
+                self.assertEqual(backups[0].read_text(), "User's old review skill")
                 self.assertEqual(INSTALLER.install(project, runtime=runtime), 0)
 
     def test_claude_user_install_update_preserves_settings_and_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary)
+            home = Path(temporary).resolve()
             config = home / "claude profile"
             config.mkdir()
             instructions = config / "CLAUDE.md"
@@ -109,7 +111,7 @@ class InstallTest(unittest.TestCase):
 
     def test_user_install_respects_custom_codex_home_and_override(self):
         with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary)
+            home = Path(temporary).resolve()
             profile = home / "custom profile"
             profile.mkdir()
             (profile / "AGENTS.md").write_text("Keep inactive guidance")
@@ -307,6 +309,9 @@ class InstallTest(unittest.TestCase):
                 project.mkdir()
                 INSTALLER.install(project)
                 skills = project / ".agents/skills"
+                old_review = skills / "showwork-adverial-review"
+                old_review.mkdir()
+                (old_review / "SKILL.md").write_text("Previous review command")
                 before = INSTALLER.contents(skills)
                 instructions = project / "AGENTS.md"
                 instructions.write_text("User prefix\n" + INSTALLER.START + "\nOld instructions\n" + INSTALLER.END)
@@ -321,7 +326,7 @@ class InstallTest(unittest.TestCase):
                     if failure == "replace" and ".showwork-stage-" in str(src) and Path(src).name == "showwork-review":
                         raise OSError("Simulated failure")
                     result = replace(src, dest)
-                    if failure == "move_after" and Path(src) == skills / "showwork-review":
+                    if failure == "move_after" and Path(src).resolve() == (skills / "showwork-review").resolve():
                         raise KeyboardInterrupt("Simulated failure")
                     return result
                 def fail_instructions(path, content):

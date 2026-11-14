@@ -1,5 +1,5 @@
 // Shared Showwork report renderer. Builds the report DOM inside `root`; used by the browser page and the desktop app.
-// hooks: { submitChoice(choiceId) -> Promise<void>, assetUrl(relativePath) -> string, connected() -> boolean, idPrefix?: string,
+// hooks: { submitChoice(choiceId) -> Promise<{sent,retryable,reason}>, assetUrl(relativePath) -> string, connected() -> boolean, idPrefix?: string,
 //          unavailableText?: string (shown on a decision while connected() is false) }
     function text(tag, content, className) { const e = document.createElement(tag); e.textContent = content; if(className) e.className=className; return e; }
     // Files worth reviewing: accordions with a read-only, editor-style code view (no outside scripts).
@@ -85,7 +85,7 @@
       rows.forEach(row=>row.no=row.mark===undefined?' '.repeat(width*2+1):String(row.old).padStart(width)+' '+String(row.new).padStart(width));
       return rows;
     }
-    function editor(file){
+    function editor(file,index){
       const box=document.createElement('div');box.className='editor';
       const bar=document.createElement('div');bar.className='editor-bar';
       const dots=text('span','','dots');dots.setAttribute('aria-hidden','true');dots.append(document.createElement('i'),document.createElement('i'),document.createElement('i'));
@@ -93,7 +93,7 @@
       const copy=text('button','Copy','copy');copy.type='button';copy.setAttribute('aria-label','Copy code from '+file.path);
       copy.onclick=async()=>{try{await navigator.clipboard.writeText(file.code);copy.textContent='Copied';}catch{copy.textContent='Copy failed';}setTimeout(()=>copy.textContent='Copy',1600);};
       bar.append(dots,text('span',file.path,'name'),text('span',label,'lang'),copy);
-      const view=document.createElement('div');view.className='code';view.tabIndex=0;view.setAttribute('role','region');view.setAttribute('aria-label','Code: '+file.path);
+      const view=document.createElement('div');view.className='code';view.tabIndex=0;view.setAttribute('role','region');view.setAttribute('aria-label','Code: '+file.path);view.dataset.commentTarget='file-'+index;
       const fragment=document.createDocumentFragment();
       for(const row of codeRows(file)){
         const line=document.createElement('div');line.className=('line '+row.kind).trim();line.append(text('span',row.no,'no'));
@@ -107,7 +107,7 @@
 export function renderReport(root, page, hooks) {
   const p = hooks.idPrefix || '';
   const $ = id => root.querySelector('[id="' + p + id + '"]');
-  let selected = null, saved = null, sending = false, observers = [], destroyed = false, unavailable = false, lightbox = null;
+  let selected = null, saved = null, delivery = null, sending = false, observers = [], destroyed = false, unavailable = false, lightbox = null;
   const unavailableText = hooks.unavailableText || 'Disconnected. Your choice cannot be saved right now.';
   root.innerHTML = `
       <div id="${p}mode" class="eyebrow"></div><h1 id="${p}title"></h1><p class="r-summary" id="${p}summary"></p>
@@ -202,7 +202,7 @@ export function renderReport(root, page, hooks) {
         const where=file.diff?'Changes':file.start_line?'Lines '+file.start_line+'–'+(file.start_line+count-1):count+' lines';
         summary.append(chevron,text('span',file.path,'file-path'),text('span',where,'file-meta'),text('span',file.why,'file-why'));
         item.append(summary);
-        item.addEventListener('toggle',()=>{if(item.open&&!item.querySelector('.editor'))item.append(editor(file));syncToggle();});
+      item.addEventListener('toggle',()=>{if(item.open&&!item.querySelector('.editor'))item.append(editor(file,index));syncToggle();});
         $('file-list').append(item);
       });
       if(files.length){const link=text('a','Files worth reviewing');link.href='#'+p+'files';$('contents').append(link);}
@@ -214,13 +214,14 @@ export function renderReport(root, page, hooks) {
       root.querySelectorAll('.option').forEach(e=>e.setAttribute('aria-disabled',String(off)));
       syncChoice();
     }
-    // The button and status follow the selection. A saved choice stays saved (button off) until another option is picked,
-    // also across a lost and restored connection, so the same choice is never sent twice. One choice is sent at a time:
+    // The button and status follow the selection. A delivered choice stays saved (button off) until another option is picked.
+    // A recorded choice with a transient delivery failure can be retried. One choice is sent at a time:
     // picking another option while one is saving is allowed, and once that save lands the status names what was saved.
     function syncChoice() {
       const isSaved=selected!=null&&selected===saved,title=id=>page.options.find(item=>item.id===id)?.title??id;
-      $('submit').disabled=unavailable||sending||selected==null||isSaved;
-      $('selection-status').textContent=unavailable?unavailableText:sending?'Saving…':isSaved?'Choice saved. You can continue in chat.':
+      $('submit').disabled=unavailable||sending||selected==null||(isSaved&&!delivery?.retryable);
+      $('submit').textContent=isSaved&&delivery?.retryable?'Retry sending':'Choose this option';
+      $('selection-status').textContent=unavailable?unavailableText:sending?'Sending…':isSaved?(delivery?.sent?'Choice sent to the original session.':delivery?.reason||'Choice saved; session delivery unavailable.'):
         saved!=null&&selected!=null?'Saved: '+title(saved)+'. Press the button to change it to '+title(selected)+'.':
         selected==null?'Choose an option, then press the button.':'Review your choice, then press the button.';
     }
@@ -232,7 +233,8 @@ export function renderReport(root, page, hooks) {
     function render() {
       selected=null; unavailable=false;
       document.title=page.title+' · Showwork'; $('mode').textContent=page.mode==='decision'?'Choose together':'Review the result';
-      $('title').textContent=page.title; $('summary').textContent=page.summary; $('decision').hidden=page.mode!=='decision';
+      $('title').textContent=page.title; $('title').dataset.commentTarget='title';
+      $('summary').textContent=page.summary; $('summary').dataset.commentTarget='summary'; $('decision').hidden=page.mode!=='decision';
       $('options').replaceChildren(); $('sections').replaceChildren(); $('checks').replaceChildren(); $('submit').disabled=true;
       $('contents').replaceChildren();$('contents').hidden=page.mode!=='handoff';$('sections').classList.toggle('handoff',page.mode==='handoff');
       $('selection-status').textContent='Choose an option, then press the button.';
@@ -247,7 +249,7 @@ export function renderReport(root, page, hooks) {
         });
       }
       const kinds={proposal:'Proposal before implementation',observed:'Observed result',explanation:'Explanation'};
-      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id=p+'section-'+index;const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div',kinds[item.kind],'tag'),text('h2',item.title),text('p',item.body));card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
+      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id=p+'section-'+index;const copy=document.createElement('div');copy.className='card-copy';const heading=text('h2',item.title),body=text('p',item.body);heading.dataset.commentTarget='section-'+index+'-title';body.dataset.commentTarget='section-'+index+'-body';copy.append(text('div',kinds[item.kind],'tag'),heading,body);card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
       renderFiles();
       const labels={verified:'Verified',failed:'Failed',unverified:'Not checked'};
       $('verification').hidden=!(page.checks||[]).length;
@@ -258,12 +260,12 @@ export function renderReport(root, page, hooks) {
     $('submit').onclick=async()=>{
       // Once the view is replaced (destroyed, or its elements rebuilt), a late answer must not touch the next page.
       const choice=selected,button=$('submit');
-      if(choice==null||choice===saved||sending||!hooks.connected()) return;
+      if(choice==null||(choice===saved&&!delivery?.retryable)||sending||!hooks.connected()) return;
       sending=true; syncChoice();
-      let failure=null;
-      try { await hooks.submitChoice(choice); } catch(error){ failure=error instanceof Error?error.message:String(error); }
+      let failure=null, result=null;
+      try { result=await hooks.submitChoice(choice); } catch(error){ failure=error instanceof Error?error.message:String(error); }
       if(destroyed||$('submit')!==button) return;
-      sending=false; if(failure===null) saved=choice;
+      sending=false; if(failure===null) { saved=choice; delivery=result||{sent:false,retryable:false,reason:'Choice saved; session delivery unavailable.'}; }
       syncChoice(); if(failure!==null&&!unavailable) $('selection-status').textContent=failure;
     };
   render();
