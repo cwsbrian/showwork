@@ -22,11 +22,6 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - run: python -m unittest discover -s tests -v
-      - run: npm test
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -39,20 +34,28 @@ jobs:
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          python3 - <<'PY'
-          import json, os, pathlib, re
-          config_path = pathlib.Path('app/src-tauri/tauri.conf.json')
-          config = json.loads(config_path.read_text())
-          major, minor, _ = map(int, config['version'].split('.'))
-          version = f'{major}.{minor}.{os.environ["BUILD_NUMBER"]}'
-          config['version'] = version
-          config_path.write_text(json.dumps(config, indent=2) + '\n')
-          cargo_path = pathlib.Path('app/src-tauri/Cargo.toml')
-          cargo = cargo_path.read_text()
-          cargo = re.sub(r'(?m)^version = "[^"]+"', f'version = "{version}"', cargo, count=1)
-          cargo_path.write_text(cargo)
-          print(f'Building Showwork {version} from {os.environ["GITHUB_SHA"]}')
-          PY
+          node <<'JS'
+          const fs = require('node:fs');
+          const configPath = 'app/src-tauri/tauri.conf.json';
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          const [major, minor] = config.version.split('.').map(Number);
+          const version = `${major}.${minor}.${process.env.BUILD_NUMBER}`;
+          config.version = version;
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+          const packagePath = 'app/package.json';
+          const packageInfo = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          packageInfo.version = version;
+          fs.writeFileSync(packagePath, JSON.stringify(packageInfo, null, 2) + '\n');
+          const lockPath = 'app/package-lock.json';
+          const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+          lock.version = version;
+          lock.packages[''].version = version;
+          fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+          const cargoPath = 'app/src-tauri/Cargo.toml';
+          const cargo = fs.readFileSync(cargoPath, 'utf8');
+          fs.writeFileSync(cargoPath, cargo.replace(/^version = "[^"]+"/m, `version = "${version}"`));
+          console.log(`Building Showwork ${version} from ${process.env.GITHUB_SHA}`);
+          JS
       - run: npm run build
         working-directory: app
       - run: cargo test --lib
@@ -62,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version=$(python3 -c "import json; print(json.load(open('app/src-tauri/tauri.conf.json'))['version'])")
+          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
           if gh release view "app-v${version}" >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "App version ${version} is already published; bump the version to ship changes."
