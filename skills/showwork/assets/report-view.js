@@ -146,6 +146,42 @@ export function renderReport(root, page, hooks) {
       button.onkeydown=e=>{if(e.key===' '||e.key==='Enter')e.stopPropagation();};
       return button;
     }
+    function prepareTables(doc,body){
+      for(const table of doc.querySelectorAll('table')){
+        const rows=[...table.rows],columns=Math.max(0,...rows.map(row=>[...row.cells].reduce((count,cell)=>count+cell.colSpan,0)));
+        if(!columns)continue;
+        const lengths=Array(columns).fill(0);
+        for(const row of rows){
+          let column=0;
+          for(const cell of row.cells){
+            if(cell.colSpan===1)lengths[column]=Math.max(lengths[column],cell.textContent.trim().length);
+            column+=cell.colSpan;
+          }
+        }
+        const widths=lengths.map(length=>length<=18?Math.max(70,Math.min(160,length*8+24)):length<=100?220:360);
+        for(const row of rows){
+          let column=0;
+          for(const cell of row.cells){
+            cell.style.wordBreak='keep-all';
+            cell.style.overflowWrap='break-word';
+            if(cell.colSpan===1){
+              cell.style.minWidth=widths[column]+'px';
+              if(lengths[column]<=18)cell.style.whiteSpace='nowrap';
+            }
+            column+=cell.colSpan;
+          }
+        }
+        const minimum=Math.max(columns===1?320:560,columns*184,widths.reduce((sum,width)=>sum+width,0));
+        table.style.width=`max(100%, ${minimum}px)`;
+        let scrollParent=table.parentElement;
+        while(scrollParent&&scrollParent!==body&&!['auto','scroll'].includes(doc.defaultView.getComputedStyle(scrollParent).overflowX))scrollParent=scrollParent.parentElement;
+        if(scrollParent===body&&!['auto','scroll'].includes(doc.defaultView.getComputedStyle(body).overflowX))scrollParent=null;
+        if(!scrollParent){
+          const wrapper=doc.createElement('div');wrapper.style.maxWidth='100%';wrapper.style.overflowX='auto';wrapper.tabIndex=0;wrapper.setAttribute('role','region');wrapper.setAttribute('aria-label','Scrollable table');
+          table.before(wrapper);wrapper.append(table);
+        }
+      }
+    }
     function visual(item, zoomable=false) {
       if(item.image) {
         const src=hooks.assetUrl(item.image);
@@ -159,6 +195,7 @@ export function renderReport(root, page, hooks) {
       frame.srcdoc='<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:24px;font:15px/1.5 system-ui;color:#172f34;box-sizing:border-box;overflow-wrap:anywhere}*{box-sizing:border-box}svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d9e3e0;vertical-align:top}pre{white-space:pre-wrap}summary{cursor:pointer}</style>'+item.html;
       frame.onload=()=>{ try { const doc=frame.contentDocument,body=doc.body,top=doc.documentElement,cap=page.mode==='handoff'?MAX_FRAME:760;let applied=0;
         if(!body||!top) return; // navigated to a document without a body (an SVG or other XML file): keep the current size
+        prepareTables(doc,body);
         // A review's finding IDs often appear in its opening table and again at the start of
         // detailed section titles. Link those existing reports without requiring new markup.
         if(jumpLinks.has(frame)) { jumpLinks.get(frame).overlays.forEach(button=>button.remove()); jumpLinks.delete(frame); }

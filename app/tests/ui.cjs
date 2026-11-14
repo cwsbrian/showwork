@@ -49,7 +49,7 @@ const fixture = {
   unread: ['d-plan2', 'e-decide1', 'other1'],
 };
 fixture.pages['b-review1'].sections = [
-  {kind: 'explanation', title: 'Findings', body: 'Summary of findings', html: '<table><tr><th>ID</th><th>Finding</th></tr><tr><td>F1</td><td>Summary only</td></tr><tr><td>F4</td><td>Open the screenshot and details</td></tr></table><div style="height:950px"></div>'},
+  {kind: 'explanation', title: 'Findings', body: 'Summary of findings', html: '<style>.wrap{overflow-x:auto}table{width:100%}</style><div class="wrap" tabindex="0"><table><tr><th>ID</th><th>Severity</th><th>Evidence</th><th>Finding</th><th>Fix</th></tr><tr><td>F1</td><td>P2</td><td>Code</td><td>Summary only. This finding has a long explanation that should have enough width to remain readable rather than stacking each word vertically across the page.</td><td>Review the source and update the tests before publishing the change.</td></tr><tr><td>F4</td><td>P3</td><td>Browser</td><td>Open the screenshot and details. The summary column should stay wide enough to read several words on each line, even in a narrow report pane.</td><td>Open the detailed section and inspect the screenshot before changing the filter.</td></tr></table></div><div style="height:950px"></div>'},
   {kind: 'observed', title: 'F4 reproduction: filter issue', body: 'Detailed explanation below the table', html: '<p>Screenshot detail</p>'},
 ];
 
@@ -279,6 +279,16 @@ async function waitServer() {
   await page.getByRole('heading', {name: 'Review one'}).waitFor();
   const reviewTable = page.frameLocator('#report .section-grid iframe').first();
   await reviewTable.locator('tr[data-showwork-jump="1"]').waitFor();
+  const tableMetrics = await reviewTable.locator('table').evaluate(table => ({width: table.getBoundingClientRect().width, viewport: table.parentElement.clientWidth, shortWidths: [...table.rows[1].cells].slice(0, 3).map(cell => cell.getBoundingClientRect().width), nowrap: [...table.rows[1].cells].slice(0, 3).every(cell => getComputedStyle(cell).whiteSpace === 'nowrap')}));
+  assert.ok(tableMetrics.width >= 900 && tableMetrics.width > tableMetrics.viewport, `five-column report table keeps readable widths and scrolls horizontally: ${JSON.stringify(tableMetrics)}`);
+  assert.ok(tableMetrics.shortWidths.every(width => width >= 70) && tableMetrics.nowrap, 'short label columns stay on one line');
+  await page.setViewportSize({width: 820, height: 800});
+  const narrowTable = await reviewTable.locator('table').evaluate(table => ({width: table.getBoundingClientRect().width, viewport: table.parentElement.clientWidth}));
+  assert.ok(narrowTable.width >= 900 && narrowTable.viewport < narrowTable.width, 'table keeps its minimum width in a narrow pane');
+  await reviewTable.locator('.wrap').evaluate(scroller => { scroller.scrollLeft = 120; });
+  assert.ok(await reviewTable.locator('.wrap').evaluate(scroller => scroller.scrollLeft > 0), 'columns remain reachable by horizontal scrolling');
+  await page.setViewportSize({width: 1280, height: 800});
+  await reviewTable.locator('.wrap').evaluate(scroller => { scroller.scrollLeft = 0; });
   assert.equal(await reviewTable.locator('tr[data-showwork-jump]').count(), 1, 'only findings with matching detail sections are links');
   const jumpButton = page.getByRole('button', {name: 'Open F4 details: F4 reproduction: filter issue'});
   await jumpButton.waitFor();
