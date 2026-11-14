@@ -71,6 +71,7 @@ const middle = createMiddle($('middle'), {
   },
   remove: (id) => run('Could not delete the report', () => removeReport(id)),
   removeRunning: (id) => run('Could not remove the item', () => removeRunning(id)),
+  removeStopped: (id) => run('Could not delete the task history', () => removeStopped(id)),
 });
 
 function drawProjects() {
@@ -247,6 +248,22 @@ async function removeRunning(id: string) {
   const pid = projectId;
   if (!pid) return;
   await api.deleteRunning(pid, id);
+  await refreshReports();
+  await refreshProjects();
+}
+
+async function removeStopped(id: string) {
+  const pid = projectId;
+  if (!pid) return;
+  const group = await api.listSessions(pid, id);
+  if (group.some((session) => session.alive)) throw new Error('This task still has a running session');
+  for (const session of group) await api.deleteSession(pid, session.id);
+  if (pid === projectId && runId === id) {
+    runId = null;
+    pane.clear();
+    sessions = [];
+    drawTabs();
+  }
   await refreshReports();
   await refreshProjects();
 }

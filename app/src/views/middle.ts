@@ -8,6 +8,7 @@ export interface MiddleHandlers {
   setView(view: View): void;
   remove(reportId: string): void;
   removeRunning(runId: string): void;
+  removeStopped(runId: string): void;
 }
 
 export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
@@ -42,6 +43,27 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
     return el;
   }
 
+  function withActions(button: HTMLButtonElement, title: string, actions: Array<{label: string; confirm?: string; run: () => void}>): HTMLElement {
+    const entry = document.createElement('div');
+    entry.className = 'list-entry';
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'item-actions';
+    more.textContent = '⋯';
+    more.setAttribute('aria-label', `Actions for ${title}`);
+    more.setAttribute('aria-haspopup', 'menu');
+    more.title = `Actions for ${title}`;
+    const open = (x: number, y: number) => showMenu(x, y, actions, more);
+    more.onclick = (e) => {
+      e.stopPropagation();
+      const rect = more.getBoundingClientRect();
+      open(Math.max(8, rect.right - 180), rect.bottom + 4);
+    };
+    button.oncontextmenu = (e) => { e.preventDefault(); open(e.clientX, e.clientY); };
+    entry.append(button, more);
+    return entry;
+  }
+
   function item(r: ReportMeta, selectedId: string | null): HTMLElement {
     const b = document.createElement('button');
     b.type = 'button';
@@ -72,11 +94,7 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
       b.append(need);
     }
     b.onclick = () => h.select(r.id);
-    b.oncontextmenu = (e) => {
-      e.preventDefault();
-      showMenu(e.clientX, e.clientY, [{ label: 'Delete report', confirm: 'Click again to delete report', run: () => h.remove(r.id) }]);
-    };
-    return b;
+    return withActions(b, r.title, [{ label: 'Delete report', confirm: 'Click again to delete report', run: () => h.remove(r.id) }]);
   }
 
   // A report still being made can be opened to watch its sessions.
@@ -103,12 +121,9 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
     if (!r.ended) el.append(spinner);
     el.append(tag, title, sub);
     el.onclick = () => h.selectRun(r.id);
-    el.oncontextmenu = (e) => {
-      if (r.ended) return;
-      e.preventDefault();
-      showMenu(e.clientX, e.clientY, [{ label: 'Remove from list', run: () => h.removeRunning(r.id) }]);
-    };
-    return el;
+    return withActions(el, title.textContent, r.ended
+      ? [{label: 'Delete task history', confirm: 'Click again to delete task history', run: () => h.removeStopped(r.id)}]
+      : [{label: 'Remove from list', run: () => h.removeRunning(r.id)}]);
   }
 
   let last: { projectId: string | null; reports: ReportMeta[]; view: View; selectedId: string | null; loading: boolean; running: RunningItem[]; selectedRunId: string | null } | null = null;

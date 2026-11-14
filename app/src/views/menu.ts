@@ -1,13 +1,17 @@
 let open: HTMLElement | null = null;
+let returnFocus: HTMLElement | null = null;
 
-function close() {
+function close(restoreFocus = false) {
   open?.remove();
   open = null;
+  if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
+  returnFocus = null;
 }
 
 // An item with `confirm` needs two clicks: the first only changes its label to the confirm text.
-export function showMenu(x: number, y: number, items: Array<{ label: string; run: () => void; confirm?: string }>) {
+export function showMenu(x: number, y: number, items: Array<{ label: string; run: () => void; confirm?: string }>, trigger?: HTMLElement) {
   close();
+  returnFocus = trigger ?? null;
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.setAttribute('role', 'menu');
@@ -35,6 +39,6 @@ export function showMenu(x: number, y: number, items: Array<{ label: string; run
   (menu.firstChild as HTMLElement | null)?.focus();
 }
 
-document.addEventListener('click', close);
-document.addEventListener('keydown', (e) => e.key === 'Escape' && close());
-window.addEventListener('blur', close);
+document.addEventListener('click', () => close());
+document.addEventListener('keydown', (e) => e.key === 'Escape' && close(true));
+window.addEventListener('blur', () => close());

@@ -450,11 +450,20 @@ async function waitServer() {
   await page.locator('.tab', {hasText: 'Report'}).click();
   await page.getByRole('button', {name: 'Close localhost:3000'}).click();
   await page.waitForFunction(() => !document.querySelector('.item.stopped'));
+  // Finished browser tasks can be removed from the list through a visible action.
+  await page.evaluate(s => window.__showworkMock.addSession(s), {...session('s3', 'Finished browser'), run: 'ended-run', alive: false, endedAt: '2026-02-02T10:06:00Z'});
+  await page.evaluate(s => window.__showworkMock.addSession(s), {...session('s4', 'Second browser'), run: 'ended-run', alive: false, endedAt: '2026-02-02T10:06:00Z'});
+  await page.locator('.item.stopped[data-run-id="ended-run"]').waitFor();
+  await page.getByRole('button', {name: 'Actions for Finished browser'}).click();
+  await page.getByRole('menuitem', {name: 'Delete task history'}).click();
+  assert.equal(await page.locator('.item.stopped[data-run-id="ended-run"]').count(), 1);
+  await page.getByRole('menuitem', {name: 'Click again to delete task history'}).click();
+  await page.waitForFunction(() => !document.querySelector('.item.stopped[data-run-id="ended-run"]'));
   // right-click removes a leftover working item
   await page.evaluate(() => window.__showworkMock.start({id: 'run2', projectId: 'a', type: 'plan', title: 'Login plan', branch: null, worktree: '/w', agent: 'codex', startedAt: 'x'}));
   await page.locator('.item.running[data-run-id="run2"]').waitFor();
   assert.equal(await page.locator('.item.running .item-sub').textContent(), 'In progress · codex');
-  await page.locator('.item.running').click({button: 'right'});
+  await page.getByRole('button', {name: 'Actions for Login plan'}).click();
   await page.getByRole('menuitem', {name: 'Remove from list'}).click();
   await page.waitForFunction(() => !document.querySelector('.item.running'));
   await page.evaluate(() => window.__showworkMock.start({id: 'run3', projectId: 'a', type: 'result', title: 'Live result', branch: 'feat', worktree: '/w', agent: 'codex', startedAt: '2026-02-03T00:00:00Z'}));
@@ -545,7 +554,11 @@ async function waitServer() {
   assert.ok(await page.getByRole('button', {name: 'Choose this option'}).isDisabled());
 
   // deleting a report or a project's history needs a second click
-  await item('other1').click({button: 'right'});
+  const reportActions = page.getByRole('button', {name: 'Actions for other1 title'});
+  await reportActions.click();
+  await page.keyboard.press('Escape');
+  assert.ok(await reportActions.evaluate(button => button === document.activeElement), 'Escape returns focus to the report actions');
+  await reportActions.click();
   await page.getByRole('menuitem', {name: 'Delete report'}).click();
   assert.equal(await item('other1').count(), 1);
   await page.getByRole('menuitem', {name: 'Click again to delete report'}).click();

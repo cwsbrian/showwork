@@ -138,6 +138,11 @@ button { font: inherit; cursor: pointer; }
 .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 
 .middle-body { padding: 8px; }
+.list-entry { position: relative; min-width: 0; }
+.list-entry .item { padding-right: 46px; }
+.item-actions { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; }
+.item-actions:hover, .item-actions:focus-visible { background: #fff; border-color: var(--line); color: var(--ink); }
+.item:focus-visible, .item-actions:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .item { flex-wrap: wrap; align-items: baseline; }
 .item-title { flex: 1 1 100%; font-weight: 500; order: 2; color: var(--muted); }
 .item.unread .item-title { font-weight: 700; color: var(--ink); }
