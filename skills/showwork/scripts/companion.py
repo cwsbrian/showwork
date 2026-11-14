@@ -32,6 +32,8 @@ MAX_BODY = 2 * 1024 * 1024
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_FILE = 512 * 1024  # one file read for "Files worth reviewing"
 MAX_CODE = 1536 * 1024  # all code shown on one page
+MAX_AUTO_DIFF_LINES = 80  # larger changes need a selected, explained excerpt
+MAX_INLINE_CODE_LINES = 80
 
 
 def directory(project):
@@ -60,7 +62,7 @@ def line_number(value):
 
 
 def attach_code(project, files):
-    """Show Git changes for changed files, or current code when there is no diff."""
+    """Attach short Git changes or an explicitly selected source excerpt."""
     root = Path(project).resolve()
     git_root = store.run_git(root, "rev-parse", "--show-toplevel")
     total = 0
@@ -78,10 +80,13 @@ def attach_code(project, files):
             relative = path.relative_to(root).as_posix()
             code = None
             if git_root and "lines" not in item and item.get("diff") is not False:
+                base = item.get("diff_base", "HEAD")
                 result = subprocess.run(
-                    ["git", "-C", str(root), "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", "HEAD", "--", relative],
+                    ["git", "-C", str(root), "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", base, "--", relative],
                     capture_output=True, timeout=5,
                 )
+                if result.returncode:
+                    raise ValueError(f"Cannot compare {item['path']} with {base}; choose a valid diff_base")
                 if result.returncode == 0 and result.stdout:
                     try:
                         code = result.stdout.decode("utf-8")
@@ -100,11 +105,15 @@ def attach_code(project, files):
                 if code:
                     if len(code.encode("utf-8")) > MAX_FILE:
                         raise ValueError(f"{item['path']} diff is too large; pass a smaller diff excerpt")
+                    if len(code.splitlines()) > MAX_AUTO_DIFF_LINES:
+                        raise ValueError(f"{item['path']} has too many changed lines; select a short diff excerpt with code and explain it")
                     item["code"] = code
                     item["diff"] = True
             if code is None:
                 if item.get("diff") is True:
                     raise ValueError(f"No Git diff for {item['path']}; provide a diff or omit diff: true")
+                if "lines" not in item and item.get("diff") is not False:
+                    raise ValueError(f"No Git diff for {item['path']}; select relevant lines or provide a short diff and diff_base")
                 if not path.is_file():
                     raise ValueError(f"File to review not found in the project: {item['path']}")
                 try:
@@ -164,7 +173,13 @@ def validate(page, report_type="result"):
         raise ValueError("files must be a list")
     if files and page["mode"] != "handoff":
         raise ValueError("Only a handoff lists files to review")
-    for item in files:
+    for section in sections:
+        if "files" in section and not isinstance(section["files"], list):
+            raise ValueError("section files must be a list")
+    section_files = [file for section in sections for file in section.get("files", [])]
+    if section_files and page["mode"] != "handoff":
+        raise ValueError("Only a handoff shows code excerpts")
+    for item in files + section_files:
         if not isinstance(item, dict):
             raise ValueError("Each file must be an object")
         require_text(item.get("path"), "file path")
@@ -174,6 +189,12 @@ def validate(page, report_type="result"):
                 require_text(item[key], f"file {key}")
         if "diff" in item and not isinstance(item["diff"], bool):
             raise ValueError("file diff must be true or false")
+        if "diff_base" in item:
+            require_text(item["diff_base"], "file diff_base")
+            if item["diff_base"].startswith("-"):
+                raise ValueError("file diff_base must be a Git revision")
+            if "code" in item or "lines" in item or item.get("diff") is False:
+                raise ValueError("diff_base needs an automatically attached Git diff")
         if "start_line" in item and not line_number(item["start_line"]):
             raise ValueError("file start_line must be a positive integer")
         if "lines" in item:
@@ -239,7 +260,11 @@ def publish(project, source, report_type=None, agent=None):
             name = hashlib.file_digest(stream, "sha256").hexdigest() + image.suffix.lower()
         images.append((image, "assets/" + name))
         item["image"] = "assets/" + name
-    attach_code(project, page.get("files", []))
+    attach_code(project, page.get("files", []) + [file for section in page.get("sections", []) for file in section.get("files", [])])
+    for section in page.get("sections", []):
+        for file in section.get("files", []):
+            if len(file["code"].splitlines()) > MAX_INLINE_CODE_LINES:
+                raise ValueError(f"{file['path']} code excerpt is too long; keep only the lines explained in this section")
     page["version"] = secrets.token_hex(12)
     page["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     meta = store.save_report(project, page, images, report_type, store.detect_agent(agent))

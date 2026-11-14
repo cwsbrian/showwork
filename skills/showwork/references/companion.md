@@ -158,20 +158,23 @@ Each check requires `text`, `status` (`verified`, `failed`, or `unverified`), an
 
 Read the complete relevant diff and list materially affected areas before authoring the handoff. Use the following coverage for areas that actually changed. Combine related areas when that improves understanding; do not force a fixed number of cards or cap a substantive change at three bullets.
 
-Add a **Files worth reviewing** list to a result walkthrough when files changed. Select the files a reader needs to inspect to understand the behavior, configuration, data change, or decisive verification; include every materially important file without dumping every generated or incidental file. Put them in the handoff's top-level `files` array, not in a section. Each one becomes a folded accordion showing the path and reason; opening it shows the real code in a read-only editor view with line numbers and syntax colors. If the report only verifies existing work and no files changed in scope, say so instead of inventing a list.
+Put a few **relevant code excerpts directly below the explanation they support**. Split distinct changes into separate sections or separate `files` entries within a section. Each entry shows its path, a short explanation, and a read-only code editor with line numbers and colored additions/deletions. Keep the surrounding visual or example in the section. Use the handoff's top-level `files` only for extra source references that do not belong to one explanation; those appear in folded accordions. If the report only verifies existing work and no files changed in scope, say so instead of inventing a list.
 
 ```json
-"files": [
-  {"path": "src/billing/refund.ts", "why": "Refunds now return the chat to the pool it came from."},
-  {"path": "app/Services/ChatLedger.php", "why": "Every refund is written to the ledger.", "diff": true, "code": "@@ -12,6 +12,9 @@ ...\n-old line\n+new line\n context"}
-]
+"sections": [{
+  "kind": "explanation", "title": "A refund returns to its original pool",
+  "body": "The service reads the original pool before restoring the balance.",
+  "html": "<p>Refund → original pool → balance</p>",
+  "files": [{"path": "src/billing/refund.ts", "why": "The refund uses the original pool.", "diff": true,
+             "code": "@@ -42 +42 @@\n-  return pool.default;\n+  return refund.originalPool;\n"}]
+}]
 ```
 
 - `path` (project-relative) and `why` (one short sentence: what changed there and why it matters) are required.
-- Without `code`, publishing shows the file's Git changes against `HEAD` when available, including staged changes, working-tree edits, new files and deleted files. Added and removed lines are colored and numbered from the hunk headers. If there is no Git change, it shows the current file. `lines: [first, last]` requests an excerpt; `diff: false` requests the whole current file. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
-- For a different comparison base or a narrower change, pass `diff: true` with `code` set to a unified diff for that file (for example `git diff -U3 -- <path>`).
+- Without `code`, publishing shows a short Git diff against `HEAD`, including staged, working-tree, new and deleted files. Set `diff_base` to the task's starting commit (or PR merge base) when the change is already committed. A diff over 80 lines is rejected so the report author selects useful hunks. If there is no diff, publishing requires an explicit excerpt. `lines: [first, last]` shows just those current-file lines without diff colors; `diff: false` deliberately requests the whole current file and should rarely be used. Files outside the project, `.git` contents, `.env*` files, non-UTF-8 files and files over 512 KiB are refused.
+- To show only one part of a larger change, pass `diff: true` with `code` set to a valid, short unified diff for that part. Obtain it from the actual task diff (`git diff -U3 <base> -- <path>` for committed work, or `git diff -U3 HEAD -- <path>` for local work). Keep the real hunk line numbers and `+`/`-` prefixes. Do not paste a full new file or every hunk just because the file changed. Do not invent removed lines.
 - `code` with `start_line` shows a pasted excerpt with correct line numbers. `language` overrides the extension-based coloring.
-- Show the changed region rather than a whole large file. Never include credentials or private payloads in code.
+- Show the changed region rather than a whole file. Give each excerpt a specific `why` that explains what its lines do. Never include credentials or private payloads in code.
 
 | Changed area | What the browser should explain |
 | --- | --- |

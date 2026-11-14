@@ -48,6 +48,9 @@ const fixture = {
   pages: {'a-plan1': handoff('Plan one', false), 'b-review1': handoff('Review one', false), 'c-result1': handoff('Result one', true), 'd-plan2': handoff('Plan two', true), 'e-decide1': decisionPage, closed1: {...decisionPage, title: 'Old layout question'}, other1: handoff('Other one', false)},
   unread: ['d-plan2', 'e-decide1', 'other1'],
 };
+fixture.pages['d-plan2'].sections[0].files = [
+  {path: 'src/changed.ts', why: 'The selected change is explained here.', diff: true, code: '@@ -1 +1 @@\n-const value = 1;\n+const value = 2;'},
+];
 fixture.pages['b-review1'].sections = [
   {kind: 'explanation', title: 'Findings', body: 'Summary of findings', html: '<style>.wrap{overflow-x:auto}table{width:100%}</style><div class="wrap" tabindex="0"><table><tr><th>ID</th><th>Severity</th><th>Evidence</th><th>Finding</th><th>Fix</th></tr><tr><td>F1</td><td>P2</td><td>Code</td><td>Summary only. This finding has a long explanation that should have enough width to remain readable rather than stacking each word vertically across the page.</td><td>Review the source and update the tests before publishing the change.</td></tr><tr><td>F4</td><td>P3</td><td>Browser</td><td>Open the screenshot and details. The summary column should stay wide enough to read several words on each line, even in a narrow report pane.</td><td>Open the detailed section and inspect the screenshot before changing the filter.</td></tr></table></div><div style="height:950px"></div>'},
   {kind: 'observed', title: 'F4 reproduction: filter issue', body: 'Detailed explanation below the table', html: '<p>Screenshot detail</p>'},
@@ -181,7 +184,7 @@ async function waitServer() {
   assert.equal(await page.locator('#report .plan-comment-mark.preview').count(), 1);
   await composer.getByRole('textbox', {name: 'Comment'}).fill('Please clarify the rollout step.');
   await composer.getByRole('button', {name: 'Add comment'}).click();
-  await page.locator('.plan-comment-pin').waitFor();
+  await page.locator('.plan-comment-pin').first().waitFor();
   assert.equal(await page.locator('.plan-comment-mark').count(), 1);
   assert.equal(await page.locator('.plan-comment-mark.preview').count(), 0);
   assert.equal((await page.evaluate(() => window.__showworkMock.calls)).at(-1).fn, 'addComment');
@@ -239,6 +242,21 @@ async function waitServer() {
   await composer.getByRole('textbox', {name: 'Comment'}).fill('Keep the old behavior for empty values.');
   await composer.getByRole('button', {name: 'Add comment'}).click();
   await diffEditor.locator('.plan-comment-pin').waitFor();
+  const inlineEditor = page.locator('#report .section-code .code');
+  assert.equal(await inlineEditor.locator('.line.add').count(), 1, 'Inline code shows the added line');
+  assert.equal(await inlineEditor.locator('.line.del').count(), 1, 'Inline code shows the removed line');
+  await inlineEditor.evaluate(editor => {
+    const source = editor.querySelector('.line.add .src');
+    const range = document.createRange();
+    range.selectNodeContents(source);
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+  });
+  await composer.waitFor();
+  assert.ok((await composer.locator('blockquote').textContent()).includes('const value = 2;'));
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Check the new value here.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await inlineEditor.locator('.plan-comment-pin').waitFor();
   const overallNote = page.getByRole('textbox', {name: 'Overall note'});
   await overallNote.fill('Please keep the rollout reversible.');
   await page.getByRole('button', {name: 'Save note'}).click();
@@ -249,9 +267,10 @@ async function waitServer() {
   const feedbackCall = (await page.evaluate(() => window.__showworkMock.calls)).at(-1);
   assert.equal(feedbackCall.fn, 'submitFeedback');
   assert.equal(feedbackCall.note, 'Please keep the rollout reversible and add a rollback step.');
-  assert.equal(feedbackCall.inline.length, 2);
+  assert.equal(feedbackCall.inline.length, 3);
   assert.equal(feedbackCall.inline[0].quote, selectedQuote);
   assert.deepEqual(feedbackCall.inline[1], {target: 'file-1', quote: '-const value = 1;\n+const value = 2;', body: 'Keep the old behavior for empty values.'});
+  assert.deepEqual(feedbackCall.inline[2], {target: 'file-section-0-file-0', quote: '+const value = 2;', body: 'Check the new value here.'});
   assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), true);
   await openSwitcher();
   await page.waitForFunction(() => document.querySelector('.project[data-project-id="a"] .badge')?.textContent === '1');
@@ -262,11 +281,16 @@ async function waitServer() {
   await page.getByRole('heading', {name: 'Result one'}).waitFor();
   assert.equal(await page.locator('.plan-comment-pin').count(), 0);
   await item('d-plan2').click();
-  await page.locator('.plan-comment-pin').waitFor();
+  await page.locator('.plan-comment-pin').first().waitFor();
   assert.equal(await page.getByRole('textbox', {name: 'Overall note'}).inputValue(), 'Please keep the rollout reversible and add a rollback step.');
   assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), true);
-  await page.locator('.plan-comment-pin').click();
+  await page.getByRole('button', {name: 'Open comment 1: Summary of'}).click();
   await page.getByRole('dialog', {name: 'Report comment'}).getByText('Please clarify the rollout step.').waitFor();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Delete', exact: true}).click();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Confirm delete'}).click();
+  assert.equal(await inlineEditor.locator('.plan-comment-pin').count(), 1, 'Inline code comment remains after reopening the report');
+  await inlineEditor.locator('.plan-comment-pin').click();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByText('Check the new value here.').waitFor();
   await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Delete', exact: true}).click();
   await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Confirm delete'}).click();
   assert.equal(await page.locator('.plan-comment-pin').count(), 0);

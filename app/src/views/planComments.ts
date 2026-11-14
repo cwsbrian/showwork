@@ -66,12 +66,11 @@ export function createPlanComments(
   }
 
   function targetFor(anchor: CommentAnchor): {element: HTMLElement; node?: Text; frame?: HTMLIFrameElement; sources?: HTMLElement[]} | null {
-    if (/^file-\d+$/.test(anchor.target)) {
-      const element = [...root.querySelectorAll<HTMLElement>('.code[data-comment-target]')]
-        .find((candidate) => candidate.dataset.commentTarget === anchor.target);
-      if (!element) return null;
-      const sources = codeSources(element);
-      return codeText(sources).slice(anchor.start, anchor.end) === anchor.quote ? {element, sources} : null;
+    const codeElement = [...root.querySelectorAll<HTMLElement>('.code[data-comment-target]')]
+      .find((candidate) => candidate.dataset.commentTarget === anchor.target);
+    if (codeElement) {
+      const sources = codeSources(codeElement);
+      return codeText(sources).slice(anchor.start, anchor.end) === anchor.quote ? {element: codeElement, sources} : null;
     }
     const visual = visualTargets.get(anchor.target);
     if (visual) {

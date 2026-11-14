@@ -212,7 +212,7 @@ class CompanionTest(unittest.TestCase):
         page = copy.deepcopy(HANDOFF)
         page["files"] = [
             {"path": "src/store.ts", "why": "Saves tasks", "lines": [2, 3]},
-            {"path": "src/store.ts", "why": "Whole file"},
+            {"path": "src/store.ts", "why": "Whole file", "diff": False},
             {"path": "api.py", "why": "Diff given by the author", "diff": True, "code": "@@ -1 +1 @@\n-a\n+b"},
         ]
         files = self.publish(page)["files"]
@@ -244,7 +244,7 @@ class CompanionTest(unittest.TestCase):
             {"path": "changed.py", "why": "Modified"},
             {"path": "deleted.py", "why": "Removed"},
             {"path": "new.py", "why": "Added"},
-            {"path": "unchanged.py", "why": "Unchanged"},
+            {"path": "unchanged.py", "why": "Unchanged", "lines": [1, 1]},
             {"path": "changed.py", "why": "Requested excerpt", "lines": [1, 2]},
             {"path": "changed.py", "why": "Requested whole file", "diff": False},
         ]
@@ -260,11 +260,35 @@ class CompanionTest(unittest.TestCase):
         self.assertTrue(files[2]["diff"])
         self.assertIn("+fresh", files[2]["code"])
         self.assertNotIn("diff", files[3])
-        self.assertEqual(files[3]["code"], "keep\n")
+        self.assertEqual(files[3]["code"], "keep")
         self.assertEqual(files[4]["code"], "new\nsame")
         self.assertNotIn("diff", files[4])
         self.assertEqual(files[5]["code"], "new\nsame\nmore\n")
         self.assertFalse(files[5]["diff"])
+
+        # A completed change can still show its actual additions and removals.
+        git("add", ".")
+        git("commit", "-qm", "change")
+        page["files"] = [{"path": "changed.py", "why": "Saved change", "diff_base": "HEAD~1"}]
+        source.write_text(json.dumps(page))
+        committed = COMPANION.publish(repo, source)["files"]
+        self.assertTrue(committed[0]["diff"])
+        self.assertIn("-old", committed[0]["code"])
+        self.assertIn("+new", committed[0]["code"])
+
+    def test_section_code_is_attached_and_full_file_fallback_is_rejected(self):
+        (self.project / "part.py").write_text("before\nimportant\nafter\n")
+        page = copy.deepcopy(HANDOFF)
+        page["sections"][0]["files"] = [{"path": "part.py", "why": "Shows the important line", "lines": [2, 2]}]
+        published = self.publish(page)
+        self.assertEqual(published["sections"][0]["files"][0]["code"], "important")
+        self.assertEqual(published["sections"][0]["files"][0]["start_line"], 2)
+        page["sections"][0]["files"][0].pop("lines")
+        with self.assertRaisesRegex(ValueError, "select relevant lines"):
+            self.publish(page)
+        page["sections"][0]["files"][0].update({"diff": True, "code": "@@ -1,0 +1,81 @@\n" + "+new\n" * 81})
+        with self.assertRaisesRegex(ValueError, "code excerpt is too long"):
+            self.publish(page)
 
     def test_files_to_review_stay_inside_the_project(self):
         outside = Path(self.temp.name).parent / "outside-showwork-test.txt"

@@ -96,6 +96,7 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
   assert.deepEqual(sent,['list','board'],'The second choice is sent after the first lands');
   await page.unroute('**/api/choice');
   const handoff={mode:'handoff',title:'Review what changed',summary:'Choices show comparisons; finished work shows results and evidence.',sections:[{kind:'explanation',title:'From request to result',body:'Proceed with clear tasks. Show alternatives only when a choice is needed.',html:'<div style="display:grid;gap:12px"><div style="background:#eef4f1;padding:16px;border-radius:10px">Request → visual choice when needed</div><div style="text-align:center">↓</div><div style="background:#e9eff8;padding:16px;border-radius:10px">Implementation · verification → result</div></div>'}],checks:[{status:'verified',text:'Keyboard selection and saved choice',evidence:'Selected with arrow keys in Chromium, submitted, and confirmed the board event.'},{status:'unverified',text:'Visual quality of a real user app',evidence:'This checks the companion feature; no separate app was evaluated.'}]};
+  handoff.sections[0].files=[{path:'src/choice.ts',why:'The saved choice now uses the selected value.',diff:true,code:'@@ -7 +7 @@\n-  save(defaultChoice);\n+  save(selectedChoice);'}];
   handoff.sections.push({kind:'explanation',title:'Routing and schema explanation example',body:'Rendering example only; it does not represent a real app change or applied migration.',html:'<h2>Changed field comparison</h2><table><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>'+Array.from({length:25},(_,i)=>`<tr><th>column_${i}</th><td>nullable</td><td>NOT NULL · Example explanation</td></tr>`).join('')+'</tbody></table><details><summary>Check command details</summary><div style="height:400px">Additional check results</div></details>'});
   handoff.sections.push({kind:'observed',title:'Review capture attachment check',body:'Companion screen captured in Chromium for this check; not a mobile simulator capture.',image:path.join(output,'decision.png')});
   fs.writeFileSync(path.join(temporary,'store.ts'),Array.from({length:30},(_,i)=>i===11?'export async function saveTask(task: Task): Promise<void> { // keep order\n  const key = "tasks"; return storage.set(key, JSON.stringify([task, 42, null]));\n}':`const line${i} = ${i};`).join('\n'));
@@ -112,6 +113,11 @@ async function waitFor(check) { const end=Date.now()+5000; while(Date.now()<end)
     {path:'package-lock.json',why:'A very long diff still opens.',diff:true,code:'@@ -1,0 +1,70000 @@\n'+Array.from({length:70000},(_,i)=>'+ v'+i).join('\n')},
   ];
   publish(handoff);await page.getByRole('heading',{name:handoff.title}).waitFor();
+  const inline=page.locator('#section-0 .section-code');
+  assert.equal(await inline.count(),1,'The selected code excerpt appears beneath its explanation');
+  assert.equal(await inline.locator('.line.add').count(),1);
+  assert.equal(await inline.locator('.line.del').count(),1);
+  assert.equal(await inline.locator('.section-code-why').textContent(),'The saved choice now uses the selected value.');
   const files=page.locator('#files details.file');
   assert.equal(await files.count(),5);
   assert.equal(await page.locator('#files .editor').count(),0,'Code stays folded until opened');

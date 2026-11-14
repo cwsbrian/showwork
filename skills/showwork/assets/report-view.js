@@ -326,7 +326,9 @@ export function renderReport(root, page, hooks) {
         });
       }
       const kinds={proposal:'Proposal before implementation',observed:'Observed result',explanation:'Explanation'};
-      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id=p+'section-'+index;const copy=document.createElement('div');copy.className='card-copy';const heading=text('h2',item.title),body=text('p',item.body);heading.dataset.commentTarget='section-'+index+'-title';body.dataset.commentTarget='section-'+index+'-body';copy.append(text('div',kinds[item.kind],'tag'),heading,body);card.append(copy,visual(item,page.mode==='handoff'));$('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
+      (page.sections||[]).forEach((item,index)=>{ const card=document.createElement('section');card.className='card';card.id=p+'section-'+index;const copy=document.createElement('div');copy.className='card-copy';const heading=text('h2',item.title),body=text('p',item.body);heading.dataset.commentTarget='section-'+index+'-title';body.dataset.commentTarget='section-'+index+'-body';copy.append(text('div',kinds[item.kind],'tag'),heading,body);card.append(copy,visual(item,page.mode==='handoff'));
+        (item.files||[]).forEach((file,fileIndex)=>{const snippet=document.createElement('div');snippet.className='section-code';const explanation=document.createElement('div');explanation.className='section-code-copy';const path=text('strong',file.path,'file-path'),why=text('p',file.why,'section-code-why');why.dataset.commentTarget='section-'+index+'-file-'+fileIndex+'-why';explanation.append(path,why);snippet.append(explanation,editor(file,'section-'+index+'-file-'+fileIndex));card.append(snippet);});
+        $('sections').append(card);const link=text('a',item.title);link.href='#'+card.id;$('contents').append(link); });
       renderFiles();
       const labels={verified:'Verified',failed:'Failed',unverified:'Not checked'};
       $('verification').hidden=!(page.checks||[]).length;
