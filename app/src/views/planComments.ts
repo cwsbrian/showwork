@@ -66,7 +66,7 @@ export function createPlanComments(
   }
 
   function targetFor(anchor: CommentAnchor): {element: HTMLElement; node?: Text; frame?: HTMLIFrameElement; sources?: HTMLElement[]} | null {
-    if (anchor.target.startsWith('file-')) {
+    if (/^file-\d+$/.test(anchor.target)) {
       const element = [...root.querySelectorAll<HTMLElement>('.code[data-comment-target]')]
         .find((candidate) => candidate.dataset.commentTarget === anchor.target);
       if (!element) return null;
@@ -143,7 +143,7 @@ export function createPlanComments(
     const box = document.createElement('aside');
     box.className = 'plan-comment-pop';
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Plan comment');
+    box.setAttribute('aria-label', 'Report comment');
     const header = document.createElement('div');
     header.className = 'plan-comment-pop-head';
     const title = document.createElement('strong');
@@ -267,7 +267,7 @@ export function createPlanComments(
     const box = document.createElement('aside');
     box.className = 'plan-comment-pop';
     box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Add plan comment');
+    box.setAttribute('aria-label', 'Add report comment');
     const title = document.createElement('strong');
     title.textContent = 'Comment on this text';
     const quote = document.createElement('blockquote');
@@ -402,7 +402,7 @@ export function createPlanComments(
   });
   // WebKit can finish a native text drag in a sandboxed srcdoc without firing
   // a script-visible mouseup or selectionchange there. Poll the selected text
-  // briefly while this plan is open and act once it has stopped changing.
+  // briefly while this report is open and act once it has stopped changing.
   let lastSelection = '', selectedSince = 0, handledSelection = '';
   const selectionTimer = setInterval(() => {
     let active = '';

@@ -1,4 +1,4 @@
-//! Sends a plan's saved feedback to the exact Orca terminal that authored it.
+//! Sends a report's saved feedback to the exact Orca terminal that authored it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -97,7 +97,7 @@ fn safe_text(value: &str) -> String {
 }
 
 fn message(meta: &ReportMeta, page: &Value, note: Option<&str>, comments: &[ReportComment]) -> String {
-    let mut text = format!("Feedback on Showwork plan: {}\nReport ID: {}\n", safe_text(&meta.title), meta.id);
+    let mut text = format!("Feedback on Showwork {} report: {}\nReport ID: {}\n", safe_text(&meta.r#type), safe_text(&meta.title), meta.id);
     if let Some(body) = note {
         text.push_str("\nOverall note:\n");
         text.push_str(&safe_text(body));
@@ -108,7 +108,7 @@ fn message(meta: &ReportMeta, page: &Value, note: Option<&str>, comments: &[Repo
         for (index, comment) in comments.iter().enumerate() {
             text.push_str(&format!("\n{}. ", index + 1));
             if let Some(path) = comment.anchor.target.strip_prefix("file-")
-                .and_then(|index| index.parse::<usize>().ok())
+                .and_then(|index| index.split('-').next()?.parse::<usize>().ok())
                 .and_then(|index| page.get("files")?.get(index))
                 .and_then(|file| file.get("path")).and_then(Value::as_str) {
                 text.push_str(&format!("File: {}\n   ", safe_text(path)));
@@ -117,13 +117,12 @@ fn message(meta: &ReportMeta, page: &Value, note: Option<&str>, comments: &[Repo
                 safe_text(&comment.anchor.quote), safe_text(&comment.body)));
         }
     }
-    text.push_str("\nPlease respond to each point in this session and update the plan as needed.");
+    text.push_str("\nPlease respond to each point in this session and update the report or work as needed.");
     text
 }
 
 pub fn status(store: &Store, project_id: &str, report_id: &str) -> Result<FeedbackStatus, StoreError> {
     let report = store.get_report(project_id, report_id)?;
-    if report.meta.r#type != "plan" || report.meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
     let (snapshot, note, comments) = store.feedback_snapshot(project_id, report_id)?;
     let submitted = store.feedback_receipt(project_id, report_id)?
         .is_some_and(|receipt| receipt.snapshot == snapshot);
@@ -160,7 +159,6 @@ fn submit_with_cli(store: &Store, project_id: &str, report_id: &str, version: &s
     let report = store.get_report(project_id, report_id)?;
     let meta = report.meta;
     let page = report.page;
-    if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
     if meta.version != version { return Err(StoreError::StaleVersion); }
     let (snapshot, note, comments) = store.feedback_snapshot(project_id, report_id)?;
     if note.is_none() && comments.is_empty() { return Err(StoreError::NoFeedback); }
@@ -246,18 +244,18 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn submit_sends_saved_feedback_once_to_matching_terminal() {
+    fn review_submit_sends_saved_feedback_once_to_matching_terminal() {
         use std::os::unix::fs::PermissionsExt;
         let temp = TempDir::new().unwrap();
         let store = Store { root: temp.path().join("store") };
         let dir = store.root.join("projects/p1/reports/r1");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("meta.json"), json!({
-            "id":"r1","project_id":"p1","type":"plan","mode":"handoff","title":"Plan",
+            "id":"r1","project_id":"p1","type":"review","mode":"handoff","title":"Review",
             "branch":null,"commit":null,"worktree":"/w","agent":"codex","created_at":"now","version":"v1",
             "agent_session":{"terminal_handle":"term_123","terminal_incarnation":"inc-1","worktree_id":"wt-1","thread_id":"thread-1"}
         }).to_string()).unwrap();
-        fs::write(dir.join("page.json"), json!({"mode":"handoff","title":"Plan"}).to_string()).unwrap();
+        fs::write(dir.join("page.json"), json!({"mode":"handoff","title":"Review"}).to_string()).unwrap();
         store.save_plan_note("p1", "r1", "v1", "Overall feedback").unwrap();
         store.add_comment("p1", "r1", "v1", CommentAnchor {
             target: "summary".into(), start: 0, end: 5, quote: "Quote".into(),
@@ -279,6 +277,7 @@ fi
         assert!(!status(&store, "p1", "r1").unwrap().submitted);
         submit_with_cli(&store, "p1", "r1", "v1", &script).unwrap();
         let message = fs::read_to_string(&sent).unwrap();
+        assert!(message.contains("Feedback on Showwork review report: Review"));
         assert!(message.contains("Overall note:\nOverall feedback"));
         assert!(message.contains("Selected text: “Quote”\n   Comment: Inline feedback"));
         assert!(status(&store, "p1", "r1").unwrap().submitted);

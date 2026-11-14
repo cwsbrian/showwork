@@ -6,7 +6,7 @@ interface Actions {
   submit(): Promise<void>;
 }
 
-export function createPlanFeedback(root: HTMLElement, note: PlanNote | null, initial: FeedbackStatus, actions: Actions) {
+export function createPlanFeedback(root: HTMLElement, note: PlanNote | null, initial: FeedbackStatus, actions: Actions, reportType: string) {
   let savedBody = note?.body ?? '';
   let state = initial;
   let busy = false;
@@ -16,11 +16,11 @@ export function createPlanFeedback(root: HTMLElement, note: PlanNote | null, ini
   const heading = document.createElement('h2');
   heading.textContent = 'Overall note';
   const description = document.createElement('p');
-  description.textContent = 'Feedback about the whole plan';
+  description.textContent = `Feedback about the whole ${reportType}`;
   const input = document.createElement('textarea');
   input.value = savedBody;
   input.maxLength = 20000;
-  input.placeholder = 'Write a note about the whole plan…';
+  input.placeholder = `Write a note about the whole ${reportType}…`;
   input.setAttribute('aria-label', 'Overall note');
   const controls = document.createElement('div');
   controls.className = 'plan-feedback-controls';

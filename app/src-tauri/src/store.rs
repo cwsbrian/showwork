@@ -93,7 +93,6 @@ pub enum StoreError {
     BadId,
     NotFound,
     NotADecision,
-    NotAPlan,
     InvalidComment,
     InvalidNote,
     NoFeedback,
@@ -113,7 +112,6 @@ impl fmt::Display for StoreError {
             StoreError::BadId => write!(f, "Invalid id"),
             StoreError::NotFound => write!(f, "Not found"),
             StoreError::NotADecision => write!(f, "This report is not a decision"),
-            StoreError::NotAPlan => write!(f, "Comments are available on plan reports"),
             StoreError::InvalidComment => write!(f, "Invalid comment or text selection"),
             StoreError::InvalidNote => write!(f, "Note is too long"),
             StoreError::NoFeedback => write!(f, "Add a note or comment first"),
@@ -570,9 +568,6 @@ impl Store {
     pub fn list_comments(&self, project_id: &str, report_id: &str) -> Result<Vec<ReportComment>, StoreError> {
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" {
-            return Err(StoreError::NotAPlan);
-        }
         let text = match fs::read_to_string(dir.join("comments.jsonl")) {
             Ok(text) => text,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -585,7 +580,6 @@ impl Store {
     pub fn get_plan_note(&self, project_id: &str, report_id: &str) -> Result<Option<PlanNote>, StoreError> {
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
         let source = match fs::read_to_string(dir.join("note.json")) {
             Ok(source) => source,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -599,7 +593,6 @@ impl Store {
         let _guard = COMMENTS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
         if meta.version != version { return Err(StoreError::StaleVersion); }
         let body = body.trim();
         if body.len() > 20_000 { return Err(StoreError::InvalidNote); }
@@ -633,7 +626,6 @@ impl Store {
 
     pub fn feedback_snapshot(&self, project_id: &str, report_id: &str) -> Result<(FeedbackSnapshot, Option<PlanNote>, Vec<ReportComment>), StoreError> {
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
         let note = self.get_plan_note(project_id, report_id)?;
         let comments = self.list_comments(project_id, report_id)?;
         let snapshot = FeedbackSnapshot {
@@ -671,9 +663,6 @@ impl Store {
         let _guard = COMMENTS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" {
-            return Err(StoreError::NotAPlan);
-        }
         if meta.version != version {
             return Err(StoreError::StaleVersion);
         }
@@ -702,7 +691,6 @@ impl Store {
         check_id(comment_id)?;
         let dir = self.report_dir(project_id, report_id)?;
         let meta = self.find_meta(project_id, report_id)?;
-        if meta.r#type != "plan" || meta.mode != "handoff" { return Err(StoreError::NotAPlan); }
         if meta.version != version { return Err(StoreError::StaleVersion); }
         let path = dir.join("comments.jsonl");
         let source = fs::read_to_string(&path)?;
@@ -956,7 +944,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_comments_persist_and_reject_stale_or_invalid_input() {
+    fn report_comments_persist_across_types_and_reject_stale_or_invalid_input() {
         let (_tmp, store) = store();
         add_project(&store, "p1", "alpha", "/r/.git", None);
         add_report(&store, "p1", "plan1", "handoff", "/w", "v1");
@@ -974,7 +962,21 @@ mod tests {
         assert_eq!(store.list_comments("p1", "plan1").unwrap(), vec![second]);
         assert_eq!(store.delete_comment("p1", "plan1", "v1", &saved.id), Err(StoreError::NotFound));
         add_report(&store, "p1", "choice", "decision", "/w", "v2");
-        assert_eq!(store.list_comments("p1", "choice").unwrap_err(), StoreError::NotAPlan);
+        assert!(store.list_comments("p1", "choice").unwrap().is_empty());
+        let decision_comment = store.add_comment("p1", "choice", "v2", CommentAnchor {
+            target: "summary".into(), start: 0, end: 4, quote: "Pick".into(),
+        }, "Why this option?").unwrap();
+        assert_eq!(store.list_comments("p1", "choice").unwrap(), vec![decision_comment]);
+        assert_eq!(store.save_plan_note("p1", "choice", "v2", "Explain the tradeoffs").unwrap().unwrap().body, "Explain the tradeoffs");
+        add_report(&store, "p1", "result1", "handoff", "/w", "v3");
+        let meta_path = store.root.join("projects/p1/reports/result1/meta.json");
+        let mut meta: serde_json::Value = serde_json::from_slice(&fs::read(&meta_path).unwrap()).unwrap();
+        meta["type"] = json!("result");
+        fs::write(&meta_path, meta.to_string()).unwrap();
+        let result_comment = store.add_comment("p1", "result1", "v3", CommentAnchor {
+            target: "summary".into(), start: 0, end: 6, quote: "Result".into(),
+        }, "Show the check output").unwrap();
+        assert_eq!(store.list_comments("p1", "result1").unwrap(), vec![result_comment]);
     }
 
     #[test]

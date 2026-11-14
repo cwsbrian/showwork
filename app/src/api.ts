@@ -344,7 +344,7 @@ function mockApi(fixture: Fixture): ShowworkApi {
     async addComment(projectId, reportId, version, anchor, body) {
       failing('addComment');
       const meta = (reports[projectId] ?? []).find((r) => r.id === reportId);
-      if (!meta || meta.type !== 'plan' || meta.mode !== 'handoff') throw new Error('Comments are available on plan reports');
+      if (!meta) throw new Error('Report not found');
       if (meta.version !== version) throw new Error('This report was updated; reload it');
       const comment = { id: `comment-${Date.now()}-${(comments[reportId] ?? []).length}`, version, anchor, body: body.trim(), createdAt: new Date().toISOString() };
       (comments[reportId] ??= []).push(comment);

@@ -69,20 +69,16 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
       tag.textContent = 'Needs your choice';
       head.append(tag);
     }
-    if (meta.type === 'plan' && meta.mode === 'handoff') {
-      const hint = document.createElement('span');
-      hint.className = 'plan-comment-hint';
-      hint.textContent = 'Select text to comment';
-      head.append(hint);
-    }
-    if (meta.agentSession || meta.type === 'plan') {
-      const status = document.createElement('span');
-      status.className = 'agent-session-status';
-      status.setAttribute('role', 'status');
-      status.textContent = meta.agentSession ? 'Checking session…' : 'No linked session';
-      status.dataset.state = meta.agentSession ? 'checking' : 'unlinked';
-      head.append(status);
-    }
+    const hint = document.createElement('span');
+    hint.className = 'plan-comment-hint';
+    hint.textContent = 'Select text to comment';
+    head.append(hint);
+    const status = document.createElement('span');
+    status.className = 'agent-session-status';
+    status.setAttribute('role', 'status');
+    status.textContent = meta.agentSession ? 'Checking session…' : 'No linked session';
+    status.dataset.state = meta.agentSession ? 'checking' : 'unlinked';
+    head.append(status);
     return head;
   }
 
@@ -226,7 +222,7 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
           return delivery;
         },
       });
-      if (detail.meta.type === 'plan' && detail.meta.mode === 'handoff') {
+      {
         try {
           const comments = await api.listComments(projectId, reportId);
           if (mine === token) commentView = createPlanComments(body, comments,
@@ -249,7 +245,7 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
             saveNote: (text) => api.savePlanNote(projectId, reportId, detail.meta.version, text),
             status: () => api.feedbackStatus(projectId, reportId),
             submit: () => api.submitFeedback(projectId, reportId, detail.meta.version),
-          });
+          }, typeLabel(detail.meta.type).toLowerCase());
         } catch (error) {
           if (mine === token) {
             const warning = document.createElement('p');

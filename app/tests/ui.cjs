@@ -27,8 +27,12 @@ const fixture = {
   reports: {
     a: [
       meta('a-plan1', 'plan', 'feat', '2026-01-01T00:00:00Z'),
-      meta('b-review1', 'review', 'feat', '2026-01-02T00:00:00Z'),
-      meta('c-result1', 'result', 'feat', '2026-01-03T00:00:00Z'),
+      meta('b-review1', 'review', 'feat', '2026-01-02T00:00:00Z', {agentSession: {
+        terminalHandle: 'term-review', terminalIncarnation: 'incarnation-review', worktreeId: 'worktree-test', threadId: 'thread-review',
+      }}),
+      meta('c-result1', 'result', 'feat', '2026-01-03T00:00:00Z', {agentSession: {
+        terminalHandle: 'term-result', terminalIncarnation: 'incarnation-result', worktreeId: 'worktree-test', threadId: 'thread-result',
+      }}),
       meta('d-plan2', 'plan', 'main', '2026-01-04T00:00:00Z', {agentSession: {
         terminalHandle: 'term-test', terminalIncarnation: 'incarnation-test', worktreeId: 'worktree-test', threadId: 'thread-test',
       }}),
@@ -142,11 +146,22 @@ async function waitServer() {
     const rect = await page.locator('#report .pane-head').boundingBox();
     await page.mouse.click(rect.x + 10, rect.y + rect.height / 2);
   };
+  const selectSummary = async () => {
+    await page.locator('#report .r-summary').evaluate(element => {
+      const range = document.createRange();
+      range.setStart(element.firstChild, 0);
+      range.setEnd(element.firstChild, Math.min(7, element.firstChild.length));
+      const selection = document.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+    });
+  };
   await page.mouse.move(bounds.x + 4, bounds.y + bounds.height / 2);
   await page.mouse.down();
   await page.mouse.move(bounds.x + 112, bounds.y + bounds.height / 2, {steps: 12});
   await page.mouse.up();
-  const composer = page.getByRole('dialog', {name: 'Add plan comment'});
+  const composer = page.getByRole('dialog', {name: 'Add report comment'});
   await composer.waitFor();
   const selectedQuote = await composer.locator('blockquote').textContent();
   assert.ok(selectedQuote.trim().length > 0);
@@ -185,7 +200,7 @@ async function waitServer() {
   const visualPin = page.locator('#report .report-body > .plan-comment-pin');
   await visualPin.waitFor();
   await visualPin.click();
-  const visualComment = page.getByRole('dialog', {name: 'Plan comment'});
+  const visualComment = page.getByRole('dialog', {name: 'Report comment'});
   await visualComment.getByText('Frame feedback').waitFor();
   await clickBackground();
   assert.equal(await visualComment.count(), 0);
@@ -247,14 +262,29 @@ async function waitServer() {
   assert.equal(await page.getByRole('textbox', {name: 'Overall note'}).inputValue(), 'Please keep the rollout reversible and add a rollback step.');
   assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), true);
   await page.locator('.plan-comment-pin').click();
-  await page.getByRole('dialog', {name: 'Plan comment'}).getByText('Please clarify the rollout step.').waitFor();
-  await page.getByRole('dialog', {name: 'Plan comment'}).getByRole('button', {name: 'Delete', exact: true}).click();
-  await page.getByRole('dialog', {name: 'Plan comment'}).getByRole('button', {name: 'Confirm delete'}).click();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByText('Please clarify the rollout step.').waitFor();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Delete', exact: true}).click();
+  await page.getByRole('dialog', {name: 'Report comment'}).getByRole('button', {name: 'Confirm delete'}).click();
   assert.equal(await page.locator('.plan-comment-pin').count(), 0);
   await item('c-result1').click();
   await item('d-plan2').click();
   assert.equal(await page.locator('.plan-comment-pin').count(), 0);
   assert.equal(await page.locator('#report .report-body > .plan-comment-pin').count(), 0);
+  // Review reports have the same inline comments, overall note and session submit.
+  await item('b-review1').click();
+  await page.getByRole('heading', {name: 'Review one'}).waitFor();
+  await selectSummary();
+  await composer.waitFor();
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Check this finding again.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await page.locator('.plan-comment-pin').waitFor();
+  await page.getByRole('textbox', {name: 'Overall note'}).fill('Recheck the conclusion.');
+  await page.getByRole('button', {name: 'Submit feedback'}).click();
+  await page.getByText('Sent to the original session.').waitFor();
+  const reviewSubmission = (await page.evaluate(() => window.__showworkMock.calls)).at(-1);
+  assert.equal(reviewSubmission.reportId, 'b-review1');
+  assert.deepEqual(reviewSubmission.inline.map(c => c.body), ['Check this finding again.']);
+  assert.equal(reviewSubmission.note, 'Recheck the conclusion.');
   await item('c-result1').click();
   await page.getByRole('heading', {name: 'Result one'}).waitFor();
   assert.ok(await page.getByRole('heading', {name: 'Files worth reviewing'}).isVisible());
@@ -264,6 +294,30 @@ async function waitServer() {
   assert.equal(await page.locator('#report details.file').nth(1).locator('.line.add').count(), 1);
   assert.equal(await page.locator('#report details.file').nth(1).locator('.line.del').count(), 1);
   assert.equal(await item('c-result1').getAttribute('aria-current'), 'true');
+  await selectSummary();
+  await composer.waitFor();
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Mention the failed check.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await page.locator('.plan-comment-pin').waitFor();
+  await page.getByRole('button', {name: 'Submit feedback'}).click();
+  await page.getByText('Sent to the original session.').waitFor();
+  const resultSubmission = (await page.evaluate(() => window.__showworkMock.calls)).at(-1);
+  assert.equal(resultSubmission.reportId, 'c-result1');
+  assert.deepEqual(resultSubmission.inline.map(c => c.body), ['Mention the failed check.']);
+  await page.locator('#report [data-comment-target="file-1-why"]').evaluate(element => {
+    const range = document.createRange();
+    range.setStart(element.firstChild, 0);
+    range.setEnd(element.firstChild, element.firstChild.length);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+  });
+  await composer.waitFor();
+  assert.equal(await composer.locator('blockquote').textContent(), 'Changed value');
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Explain why this file changed.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  assert.equal(await page.getByRole('button', {name: 'Submit feedback'}).isDisabled(), false);
 
   // list -> flow keeps selection
   await page.getByRole('button', {name: 'Flow'}).click();
@@ -382,6 +436,26 @@ async function waitServer() {
   await page.getByRole('heading', {name: 'Pick a layout'}).waitFor();
   assert.ok(await page.locator('.pane-head .needs-choice').isVisible());
   assert.equal(await page.locator('.pane-head .needs-choice').textContent(), 'Needs your choice');
+  await selectSummary();
+  await composer.waitFor();
+  await composer.getByRole('textbox', {name: 'Comment'}).fill('Explain this choice.');
+  await composer.getByRole('button', {name: 'Add comment'}).click();
+  await page.locator('.plan-comment-pin').waitFor();
+  await page.getByRole('button', {name: 'Submit feedback'}).click();
+  await page.getByText('Sent to the original session.').waitFor();
+  assert.equal((await page.evaluate(() => window.__showworkMock.calls)).at(-1).reportId, 'e-decide1');
+  await page.locator('#report [data-comment-target="option-1-body"]').evaluate(element => {
+    const range = document.createRange();
+    range.setStart(element.firstChild, 0);
+    range.setEnd(element.firstChild, element.firstChild.length);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+  });
+  await composer.waitFor();
+  assert.equal(await composer.locator('blockquote').textContent(), 'Y body');
+  await clickBackground();
   await page.getByRole('radio', {name: 'Option Y'}).click();
   // a rejected submit (Tauri rejects with a plain string) shows its message
   await page.evaluate(() => { window.__showworkMock.failNext = 'This decision is closed'; });

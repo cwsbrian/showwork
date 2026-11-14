@@ -200,7 +200,8 @@ export function renderReport(root, page, hooks) {
         const summary=document.createElement('summary');const count=file.code.replace(/\n$/,'').split('\n').length;
         const chevron=text('span','▶','chev');chevron.setAttribute('aria-hidden','true');
         const where=file.diff?'Changes':file.start_line?'Lines '+file.start_line+'–'+(file.start_line+count-1):count+' lines';
-        summary.append(chevron,text('span',file.path,'file-path'),text('span',where,'file-meta'),text('span',file.why,'file-why'));
+        const why=text('span',file.why,'file-why');why.dataset.commentTarget='file-'+index+'-why';
+        summary.append(chevron,text('span',file.path,'file-path'),text('span',where,'file-meta'),why);
         item.append(summary);
       item.addEventListener('toggle',()=>{if(item.open&&!item.querySelector('.editor'))item.append(editor(file,index));syncToggle();});
         $('file-list').append(item);
@@ -239,11 +240,13 @@ export function renderReport(root, page, hooks) {
       $('contents').replaceChildren();$('contents').hidden=page.mode!=='handoff';$('sections').classList.toggle('handoff',page.mode==='handoff');
       $('selection-status').textContent='Choose an option, then press the button.';
       if(page.mode==='decision') {
-        $('question').textContent=page.question;
+        $('question').textContent=page.question;$('question').dataset.commentTarget='question';
         page.options.forEach((item,i)=>{
           const card=document.createElement('div'); card.className='card option'; card.tabIndex=0; card.setAttribute('role','radio'); card.setAttribute('aria-checked','false'); card.dataset.choice=item.id; card.setAttribute('aria-label',item.title);
           card.append(visual(item)); const copy=document.createElement('div');copy.className='card-copy';copy.append(text('div','Option '+(i+1),'tag'));
-          const heading=text('h3','','option-label');heading.append(text('span','','radio'),text('span',item.title));copy.append(heading,text('p',item.body));card.append(copy);
+          const heading=text('h3','','option-label'),optionTitle=text('span',item.title),optionBody=text('p',item.body);
+          optionTitle.dataset.commentTarget='option-'+i+'-title';optionBody.dataset.commentTarget='option-'+i+'-body';
+          heading.append(text('span','','radio'),optionTitle);copy.append(heading,optionBody);card.append(copy);
           card.onclick=()=>choose(item.id);card.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();choose(item.id);}else if(['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'].includes(e.key)){e.preventDefault();const offset=['ArrowRight','ArrowDown'].includes(e.key)?1:-1;const target=(i+offset+page.options.length)%page.options.length;choose(page.options[target].id);$('options').children[target].focus();}};
           $('options').append(card);
         });
@@ -253,7 +256,7 @@ export function renderReport(root, page, hooks) {
       renderFiles();
       const labels={verified:'Verified',failed:'Failed',unverified:'Not checked'};
       $('verification').hidden=!(page.checks||[]).length;
-      (page.checks||[]).forEach(item=>{const row=document.createElement('div');row.className='check';row.append(text('span',labels[item.status],'badge '+item.status));const detail=document.createElement('div');detail.append(text('strong',item.text),text('p',item.evidence,'evidence'));row.append(detail);$('checks').append(row);});
+      (page.checks||[]).forEach((item,index)=>{const row=document.createElement('div');row.className='check';row.append(text('span',labels[item.status],'badge '+item.status));const detail=document.createElement('div'),check=text('strong',item.text),evidence=text('p',item.evidence,'evidence');check.dataset.commentTarget='check-'+index+'-text';evidence.dataset.commentTarget='check-'+index+'-evidence';detail.append(check,evidence);row.append(detail);$('checks').append(row);});
       $('footer').textContent=page.mode==='decision'?'Your choice applies only to this question. Share more feedback in chat.':'Observed results are separate from explanatory visuals. Check labels reflect the evidence provided by the author.';
       if(page.mode==='decision') syncAvailable();
     }
