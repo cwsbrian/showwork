@@ -66,9 +66,23 @@ async function waitServer() {
 
   const updatePanel = page.locator('#updates');
   await updatePanel.getByText('Showwork 0.2.0 (local-r)').waitFor();
-  await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
   await updatePanel.getByText('Up to date with GitHub main (local-r).').waitFor();
+  assert.equal(await page.evaluate(() => window.__showworkMock.calls.filter(c => c.fn === 'getRepositoryRevision').length), 1, 'checks GitHub on launch');
   assert.equal(await page.evaluate(() => window.__showworkMock.calls.filter(c => c.fn === 'checkAppUpdate').length), 0);
+  const autoContext = await browser.newContext({viewport: {width: 1280, height: 800}});
+  await autoContext.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, {...fixture,
+    repositoryRevision: 'remote-revision',
+    availableUpdate: {version: '0.2.2', notes: 'Source commit: remote-revision'},
+  });
+  const autoPage = await autoContext.newPage();
+  await autoPage.goto(URL_BASE);
+  const autoPanel = autoPage.locator('#updates');
+  await autoPanel.getByText('Update available').waitFor();
+  await autoPanel.getByRole('button', {name: 'Install update'}).waitFor();
+  assert.ok(await autoPanel.evaluate(el => el.classList.contains('has-update')));
+  const footer = await autoPanel.boundingBox();
+  assert.ok(footer && Math.abs(footer.y + footer.height - 800) < 2, 'update notice stays at the bottom left');
+  await autoContext.close();
   await page.evaluate(() => { window.__showworkMock.repositoryRevision = 'remote-revision'; });
   await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
   await updatePanel.getByText(/The matching signed app build is not published yet/).waitFor();
@@ -78,7 +92,8 @@ async function waitServer() {
   assert.equal(await updatePanel.getByRole('button', {name: 'Install update'}).isVisible(), false);
   await page.evaluate(() => { window.__showworkMock.availableUpdate = {version: '0.2.2', notes: 'Source commit: remote-revision\nImproved report loading'}; });
   await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
-  await updatePanel.getByText('GitHub main: remote-. Installed: local-r. Update 0.2.2 ready.').waitFor();
+  await updatePanel.getByText('Showwork 0.2.2 is ready to install. GitHub main: remote-.').waitFor();
+  await updatePanel.getByText('Update available').waitFor();
   await updatePanel.getByText(/Improved report loading/).waitFor();
   await updatePanel.getByRole('button', {name: 'Install update'}).click();
   await updatePanel.getByText('Update installed. Restarting Showwork…').waitFor();

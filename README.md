@@ -40,7 +40,7 @@ The explanation focuses on:
 
 Explicit Showwork commands require the macOS Showwork app (see [App (macOS)](docs/installation.md#app-macos)). Live web pages and iOS Simulators appear as tabs inside it. If the app is unavailable, the command reports that limit instead of opening a separate browser or Simulator window.
 
-The app has **Check for updates** below the project switcher. It compares the installed app's build commit with GitHub's latest `main` commit, then downloads and installs the matching signed build when available. [Release setup and the first-install step](docs/installation.md#app-macos) are separate from updating the agent skills.
+The app checks for updates on launch and every 30 minutes. When GitHub's latest `main` commit has a matching signed build, **Update available** appears at the bottom left with an install button. [Release setup and the first-install step](docs/installation.md#app-macos) are separate from updating the agent skills.
 
 It avoids a long work diary or approval at every step. Put supporting technical detail under “Show details.”
 

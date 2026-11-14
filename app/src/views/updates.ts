@@ -1,6 +1,7 @@
 import type { AppUpdate, ShowworkApi } from '../api';
 
 const short = (revision: string) => revision.slice(0, 7);
+const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 export function createUpdates(host: HTMLElement, api: ShowworkApi) {
   const version = document.createElement('span');
@@ -23,6 +24,11 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
 
+  const badge = document.createElement('strong');
+  badge.className = 'update-badge';
+  badge.textContent = 'Update available';
+  badge.hidden = true;
+
   const notes = document.createElement('p');
   notes.className = 'update-notes';
   notes.hidden = true;
@@ -35,12 +41,18 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
   const row = document.createElement('div');
   row.className = 'update-row';
   row.append(version, check, install);
-  host.append(row, status, notes, progress);
+  host.append(row, badge, status, notes, progress);
 
   let available: AppUpdate | null = null;
+  let working = false;
   const busy = (value: boolean) => {
+    working = value;
     check.disabled = value;
     install.disabled = value;
+  };
+  const showAvailable = (value: boolean) => {
+    badge.hidden = !value;
+    host.classList.toggle('has-update', value);
   };
 
   void Promise.all([api.getAppVersion(), api.getAppRevision()]).then(([current, revision]) => {
@@ -49,9 +61,11 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
     status.textContent = 'Could not read the app version.';
   });
 
-  check.onclick = async () => {
+  const checkForUpdates = async () => {
+    if (working) return;
     busy(true);
     install.hidden = true;
+    showAvailable(false);
     notes.hidden = true;
     progress.hidden = true;
     status.textContent = 'Checking for updates…';
@@ -74,7 +88,8 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
       }
       if (candidate?.notes?.split(/\r?\n/).some((line) => line.trim() === `Source commit: ${repositoryRevision}`)) {
         available = candidate;
-        status.textContent = `GitHub main: ${short(repositoryRevision)}. Installed: ${short(installedRevision)}. Update ${candidate.version} ready.`;
+        status.textContent = `Showwork ${candidate.version} is ready to install. GitHub main: ${short(repositoryRevision)}.`;
+        showAvailable(true);
         install.hidden = false;
         if (available.notes?.trim()) {
           notes.textContent = available.notes;
@@ -91,9 +106,10 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
       busy(false);
     }
   };
+  check.onclick = () => void checkForUpdates();
 
   install.onclick = async () => {
-    if (!available) return;
+    if (!available || working) return;
     const targetVersion = available.version;
     busy(true);
     progress.hidden = false;
@@ -111,6 +127,7 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
       });
       available = null;
       install.hidden = true;
+      showAvailable(false);
       progress.hidden = true;
       status.textContent = 'Update installed. Restarting Showwork…';
     } catch (error) {
@@ -120,4 +137,7 @@ export function createUpdates(host: HTMLElement, api: ShowworkApi) {
       busy(false);
     }
   };
+
+  void checkForUpdates();
+  window.setInterval(() => void checkForUpdates(), CHECK_INTERVAL_MS);
 }
