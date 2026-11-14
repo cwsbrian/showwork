@@ -136,7 +136,7 @@ def resolve_project_context(args):
             return json.dumps({"status": "selected", "confidence": "session", "project": path.name, "evidence": "previously verified project in this conversation"}, ensure_ascii=False)
         except ValueError:
             pass
-    terms = [term for term in re.findall(r"[\w-]{4,}", context) if term not in {"what", "does", "this", "that", "with", "from", "about", "project", "프로젝트", "아키텍처", "기능은", "어떻게"}]
+    terms = [term for term in re.findall(r"[\w-]{4,}", context) if term not in {"what", "does", "this", "that", "with", "from", "about", "project"}]
     suggestions = []
     for name, path in projects.items():
         title_hits = []
