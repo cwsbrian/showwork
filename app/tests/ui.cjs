@@ -280,11 +280,16 @@ async function waitServer() {
   const reviewTable = page.frameLocator('#report .section-grid iframe').first();
   await reviewTable.locator('tr[data-showwork-jump="1"]').waitFor();
   assert.equal(await reviewTable.locator('tr[data-showwork-jump]').count(), 1, 'only findings with matching detail sections are links');
-  await reviewTable.locator('tr[data-showwork-jump="1"]').click();
+  const jumpButton = page.getByRole('button', {name: 'Open F4 details: F4 reproduction: filter issue'});
+  await jumpButton.waitFor();
+  const cellBox = await reviewTable.locator('tr[data-showwork-jump="1"] td').first().boundingBox();
+  const hitBox = await jumpButton.boundingBox();
+  assert.ok(Math.abs(cellBox.x-hitBox.x) < 3 && Math.abs(cellBox.y-hitBox.y) < 3, 'parent click target covers the finding ID');
+  await jumpButton.click();
   await page.waitForFunction(() => document.activeElement?.textContent === 'F4 reproduction: filter issue');
   await page.waitForFunction(() => document.querySelector('#tabs .tabs-body')?.scrollTop > 0, null, {timeout: 3000});
   await page.locator('#tabs .tabs-body').evaluate(element => { element.scrollTop = 0; });
-  await reviewTable.getByRole('button', {name: 'Open F4 details: F4 reproduction: filter issue'}).press('Enter');
+  await jumpButton.press('Enter');
   await page.waitForFunction(() => document.querySelector('#tabs .tabs-body')?.scrollTop > 0, null, {timeout: 3000});
   await selectSummary();
   await composer.waitFor();

@@ -107,7 +107,8 @@
 export function renderReport(root, page, hooks) {
   const p = hooks.idPrefix || '';
   const $ = id => root.querySelector('[id="' + p + id + '"]');
-  let selected = null, saved = null, delivery = null, sending = false, observers = [], destroyed = false, unavailable = false, lightbox = null;
+  let selected = null, saved = null, delivery = null, sending = false, observers = [], destroyed = false, unavailable = false, lightbox = null, jumpTimer = null;
+  const jumpLinks = new Map();
   const unavailableText = hooks.unavailableText || 'Disconnected. Your choice cannot be saved right now.';
   root.innerHTML = `
       <div id="${p}mode" class="eyebrow"></div><h1 id="${p}title"></h1><p class="r-summary" id="${p}summary"></p>
@@ -160,25 +161,39 @@ export function renderReport(root, page, hooks) {
         if(!body||!top) return; // navigated to a document without a body (an SVG or other XML file): keep the current size
         // A review's finding IDs often appear in its opening table and again at the start of
         // detailed section titles. Link those existing reports without requiring new markup.
+        if(jumpLinks.has(frame)) { jumpLinks.get(frame).overlays.forEach(button=>button.remove()); jumpLinks.delete(frame); }
         if(page.mode==='handoff') {
           const sourceIndex=(page.sections||[]).indexOf(item);
           const jumpStyle=doc.createElement('style');
-          jumpStyle.textContent='tr[data-showwork-jump]{cursor:pointer}tr[data-showwork-jump]:hover{background:#eaf5f1}.showwork-jump{display:inline-block;min-width:24px;min-height:24px;border:0;padding:0;background:none;color:inherit;font:inherit;text-decoration:underline;text-align:inherit;cursor:pointer}.showwork-jump:focus-visible{outline:2px solid #116e60;outline-offset:3px}';
+          jumpStyle.textContent='.showwork-jump-label{text-decoration:underline;text-underline-offset:2px}';
           (doc.head||top).append(jumpStyle);
+          const overlays=[],positions=[];
           doc.querySelectorAll('table tr').forEach(row=>{
             const first=row.querySelector('th,td'),id=/^([A-Za-z]{1,4}\d{1,3})(?![\w-])/.exec(first?.textContent?.trim()||'')?.[1];
             if(!id||first.querySelector('a,button,input,textarea,select')) return;
             const targetIndex=(page.sections||[]).findIndex((section,index)=>index>sourceIndex&&new RegExp('^'+id+'(?:\\b|[ :：—-])','i').test(section.title));
             if(targetIndex<0) return;
             const targetTitle=page.sections[targetIndex].title;
-            row.dataset.showworkJump=String(targetIndex);row.title='Go to '+targetTitle;
+            row.dataset.showworkJump=String(targetIndex);
             const jump=()=>{const target=$('section-'+targetIndex);if(!target)return;target.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});const heading=target.querySelector('h2');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}};
-            const button=doc.createElement('button');button.type='button';button.className='showwork-jump';button.setAttribute('aria-label','Open '+id+' details: '+targetTitle);
-            while(first.firstChild) button.append(first.firstChild);
-            first.append(button);
-            button.addEventListener('click',()=>{if(!doc.getSelection()?.toString())jump();});
-            row.addEventListener('click',event=>{if(doc.getSelection()?.toString()||event.target.closest('a,button,input,textarea,select'))return;jump();});
+            const label=doc.createElement('span');label.className='showwork-jump-label';
+            while(first.firstChild) label.append(first.firstChild);
+            first.append(label);
+            // WebKit does not dispatch handlers inside a sandboxed srcdoc. Place
+            // the click target over the ID in the parent document instead.
+            const button=document.createElement('button');button.type='button';button.className='r-jump-hit';button.setAttribute('aria-label','Open '+id+' details: '+targetTitle);button.title='Go to '+targetTitle;button.onclick=jump;
+            frame.parentElement.append(button);overlays.push(button);
+            positions.push(()=>{
+              if(!frame.isConnected||!first.isConnected){button.hidden=true;return;}
+              const cell=first.getBoundingClientRect(),frameBox=frame.getBoundingClientRect(),cardBox=frame.parentElement.getBoundingClientRect();
+              button.style.left=frameBox.left+cell.left-cardBox.left+'px';
+              button.style.top=frameBox.top+cell.top-cardBox.top+'px';
+              button.style.width=Math.max(24,Math.min(cell.width,frameBox.width-cell.left))+'px';
+              button.style.height=Math.max(24,Math.min(cell.height,frameBox.height-cell.top))+'px';
+              button.hidden=cell.bottom<=0||cell.top>=frameBox.height||cell.right<=0||cell.left>=frameBox.width;
+            });
           });
+          if(overlays.length){jumpLinks.set(frame,{overlays,positions});positions.forEach(position=>position());if(!jumpTimer)jumpTimer=setInterval(()=>{for(const links of jumpLinks.values())links.positions.forEach(position=>position());},200);}
         }
         // The content height with the frame's inner viewport at `inner` px. Bottom padding shrinks the viewport while the
         // outer size stays, so the page around the frame does not move, and everything is restored before the next paint.
@@ -295,7 +310,7 @@ export function renderReport(root, page, hooks) {
     };
   render();
   return {
-    destroy() { destroyed = true; closeLightbox(); observers.forEach(observer => observer.disconnect()); observers = []; },
+    destroy() { destroyed = true; closeLightbox(); observers.forEach(observer => observer.disconnect()); observers = []; clearInterval(jumpTimer); for(const links of jumpLinks.values())links.overlays.forEach(button=>button.remove()); jumpLinks.clear(); },
     // Call when connected() may have changed.
     refresh() { if (!destroyed && page.mode === 'decision') syncAvailable(); }
   };
