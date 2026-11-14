@@ -375,9 +375,17 @@ async function waitServer() {
   await working.click();
   assert.equal(await working.getAttribute('aria-current'), 'true');
   await page.locator('.draft-document').waitFor();
+  assert.equal(await page.locator('.draft-status-copy strong').textContent(), 'Writing review report');
+  assert.equal(await page.locator('.draft-status-phase').textContent(), 'Waiting for report text');
+  assert.equal(await page.locator('.draft-status-count').textContent(), 'IN PROGRESS');
+  assert.equal(await page.locator('.draft-mark i').count(), 3);
+  assert.ok(await page.locator('.draft-waiting').isVisible());
   const firstChunk = 'The first confirmed result. '.repeat(20);
   await page.evaluate(text => window.__showworkMock.progress('a', 'run1', text), firstChunk);
   await page.waitForFunction(full => { const size = document.querySelector('.draft-copy')?.textContent.length ?? 0; return size > 2 && size < full.length; }, firstChunk);
+  assert.equal(await page.locator('.draft-waiting').isVisible(), false);
+  assert.equal(await page.locator('.draft-status-phase').textContent(), 'Report text is arriving');
+  assert.equal(await page.locator('.draft-status-count').textContent(), `${firstChunk.length.toLocaleString()} characters received`);
   await page.evaluate(() => window.__showworkMock.progress('a', 'run1', '\n\nThe check passed.'));
   await page.waitForFunction(full => document.querySelector('.draft-copy')?.textContent === full + '\n\nThe check passed.', firstChunk);
   assert.deepEqual(await page.locator('.tab').allTextContents(), ['Report']);

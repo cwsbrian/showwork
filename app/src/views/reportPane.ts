@@ -16,6 +16,9 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
   let shownText = '';
   let targetText = '';
   let draftNode: Text | null = null;
+  let draftWaiting: HTMLElement | null = null;
+  let draftPhase: HTMLElement | null = null;
+  let draftCount: HTMLElement | null = null;
   let draftTimer: ReturnType<typeof setInterval> | undefined;
   let sessionTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -29,6 +32,9 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
     draftTimer = undefined;
     draftRunId = '';
     draftNode = null;
+    draftWaiting = null;
+    draftPhase = null;
+    draftCount = null;
     shownText = '';
     targetText = '';
   }
@@ -103,26 +109,54 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
         shownText = nextText;
         targetText = nextText;
         container.replaceChildren();
-        const status = document.createElement('p');
+        const status = document.createElement('div');
         status.className = 'draft-status';
-        status.textContent = `Writing ${typeLabel(item.type).toLowerCase()} report`;
         status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        const mark = document.createElement('span');
+        mark.className = 'draft-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        for (let line = 0; line < 3; line++) mark.append(document.createElement('i'));
+        const label = document.createElement('span');
+        label.className = 'draft-status-copy';
+        const eyebrow = document.createElement('span');
+        eyebrow.className = 'draft-status-eyebrow';
+        eyebrow.textContent = 'SHOWWORK · LIVE REPORT';
+        const title = document.createElement('strong');
+        title.textContent = `Writing ${typeLabel(item.type).toLowerCase()} report`;
+        draftPhase = document.createElement('span');
+        draftPhase.className = 'draft-status-phase';
+        draftPhase.textContent = nextText ? 'Report text is arriving' : 'Waiting for report text';
+        label.append(eyebrow, title, draftPhase);
+        draftCount = document.createElement('span');
+        draftCount.className = 'draft-status-count';
+        draftCount.setAttribute('aria-hidden', 'true');
+        draftCount.textContent = nextText ? `${nextText.length.toLocaleString()} characters received` : 'IN PROGRESS';
+        status.append(mark, label, draftCount);
         const sheet = container.ownerDocument.createElement('article');
         sheet.className = 'draft-document';
         const heading = container.ownerDocument.createElement('h1');
         heading.textContent = item.title || `${typeLabel(item.type)} report`;
         const copy = container.ownerDocument.createElement('div');
         copy.className = 'draft-copy';
+        draftWaiting = container.ownerDocument.createElement('div');
+        draftWaiting.className = 'draft-waiting';
+        draftWaiting.setAttribute('aria-hidden', 'true');
+        for (let line = 0; line < 3; line++) draftWaiting.append(container.ownerDocument.createElement('i'));
+        if (nextText) draftWaiting.hidden = true;
         draftNode = container.ownerDocument.createTextNode(shownText);
         const cursor = container.ownerDocument.createElement('span');
         cursor.className = 'draft-cursor';
         cursor.setAttribute('aria-hidden', 'true');
-        copy.append(draftNode, cursor);
+        copy.append(draftWaiting, draftNode, cursor);
         sheet.append(heading, copy);
         container.append(status, sheet);
         return;
       }
       if (nextText === targetText) return;
+      if (draftWaiting) draftWaiting.hidden = !!nextText;
+      if (draftPhase) draftPhase.textContent = nextText ? 'Report text is arriving' : 'Waiting for report text';
+      if (draftCount) draftCount.textContent = nextText ? `${nextText.length.toLocaleString()} characters received` : 'IN PROGRESS';
       if (!nextText.startsWith(shownText)) {
         clearInterval(draftTimer);
         draftTimer = undefined;
