@@ -48,6 +48,10 @@ const fixture = {
   pages: {'a-plan1': handoff('Plan one', false), 'b-review1': handoff('Review one', false), 'c-result1': handoff('Result one', true), 'd-plan2': handoff('Plan two', true), 'e-decide1': decisionPage, closed1: {...decisionPage, title: 'Old layout question'}, other1: handoff('Other one', false)},
   unread: ['d-plan2', 'e-decide1', 'other1'],
 };
+fixture.pages['b-review1'].sections = [
+  {kind: 'explanation', title: 'Findings', body: 'Summary of findings', html: '<table><tr><th>ID</th><th>Finding</th></tr><tr><td>F1</td><td>Summary only</td></tr><tr><td>F4</td><td>Open the screenshot and details</td></tr></table><div style="height:950px"></div>'},
+  {kind: 'observed', title: 'F4 reproduction: filter issue', body: 'Detailed explanation below the table', html: '<p>Screenshot detail</p>'},
+];
 
 async function waitServer() {
   const end = Date.now() + 30000;
@@ -273,6 +277,15 @@ async function waitServer() {
   // Review reports have the same inline comments, overall note and session submit.
   await item('b-review1').click();
   await page.getByRole('heading', {name: 'Review one'}).waitFor();
+  const reviewTable = page.frameLocator('#report .section-grid iframe').first();
+  await reviewTable.locator('tr[data-showwork-jump="1"]').waitFor();
+  assert.equal(await reviewTable.locator('tr[data-showwork-jump]').count(), 1, 'only findings with matching detail sections are links');
+  await reviewTable.locator('tr[data-showwork-jump="1"]').click();
+  await page.waitForFunction(() => document.activeElement?.textContent === 'F4 reproduction: filter issue');
+  await page.waitForFunction(() => document.querySelector('#tabs .tabs-body')?.scrollTop > 0, null, {timeout: 3000});
+  await page.locator('#tabs .tabs-body').evaluate(element => { element.scrollTop = 0; });
+  await reviewTable.getByRole('button', {name: 'Open F4 details: F4 reproduction: filter issue'}).press('Enter');
+  await page.waitForFunction(() => document.querySelector('#tabs .tabs-body')?.scrollTop > 0, null, {timeout: 3000});
   await selectSummary();
   await composer.waitFor();
   await composer.getByRole('textbox', {name: 'Comment'}).fill('Check this finding again.');

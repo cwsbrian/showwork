@@ -158,6 +158,28 @@ export function renderReport(root, page, hooks) {
       frame.srcdoc='<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:24px;font:15px/1.5 system-ui;color:#172f34;box-sizing:border-box;overflow-wrap:anywhere}*{box-sizing:border-box}svg{max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d9e3e0;vertical-align:top}pre{white-space:pre-wrap}summary{cursor:pointer}</style>'+item.html;
       frame.onload=()=>{ try { const doc=frame.contentDocument,body=doc.body,top=doc.documentElement,cap=page.mode==='handoff'?MAX_FRAME:760;let applied=0;
         if(!body||!top) return; // navigated to a document without a body (an SVG or other XML file): keep the current size
+        // A review's finding IDs often appear in its opening table and again at the start of
+        // detailed section titles. Link those existing reports without requiring new markup.
+        if(page.mode==='handoff') {
+          const sourceIndex=(page.sections||[]).indexOf(item);
+          const jumpStyle=doc.createElement('style');
+          jumpStyle.textContent='tr[data-showwork-jump]{cursor:pointer}tr[data-showwork-jump]:hover{background:#eaf5f1}.showwork-jump{display:inline-block;min-width:24px;min-height:24px;border:0;padding:0;background:none;color:inherit;font:inherit;text-decoration:underline;text-align:inherit;cursor:pointer}.showwork-jump:focus-visible{outline:2px solid #116e60;outline-offset:3px}';
+          (doc.head||top).append(jumpStyle);
+          doc.querySelectorAll('table tr').forEach(row=>{
+            const first=row.querySelector('th,td'),id=/^([A-Za-z]{1,4}\d{1,3})(?![\w-])/.exec(first?.textContent?.trim()||'')?.[1];
+            if(!id||first.querySelector('a,button,input,textarea,select')) return;
+            const targetIndex=(page.sections||[]).findIndex((section,index)=>index>sourceIndex&&new RegExp('^'+id+'(?:\\b|[ :：—-])','i').test(section.title));
+            if(targetIndex<0) return;
+            const targetTitle=page.sections[targetIndex].title;
+            row.dataset.showworkJump=String(targetIndex);row.title='Go to '+targetTitle;
+            const jump=()=>{const target=$('section-'+targetIndex);if(!target)return;target.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});const heading=target.querySelector('h2');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}};
+            const button=doc.createElement('button');button.type='button';button.className='showwork-jump';button.setAttribute('aria-label','Open '+id+' details: '+targetTitle);
+            while(first.firstChild) button.append(first.firstChild);
+            first.append(button);
+            button.addEventListener('click',()=>{if(!doc.getSelection()?.toString())jump();});
+            row.addEventListener('click',event=>{if(doc.getSelection()?.toString()||event.target.closest('a,button,input,textarea,select'))return;jump();});
+          });
+        }
         // The content height with the frame's inner viewport at `inner` px. Bottom padding shrinks the viewport while the
         // outer size stays, so the page around the frame does not move, and everything is restored before the next paint.
         const extent=inner=>{
