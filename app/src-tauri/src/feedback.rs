@@ -64,9 +64,11 @@ fn verified_terminal(meta: &ReportMeta, executable: &Path) -> Result<String, Sto
     }
     let result = run_orca(executable, &["terminal", "show", "--terminal", &session.terminal_handle, "--json"])?;
     let terminal = result.pointer("/result/terminal").ok_or_else(|| StoreError::AgentUnavailable("Terminal details missing".into()))?;
+    let origin_path = session.worktree_id.rsplit_once("::")
+        .map(|(_, path)| path).unwrap_or(&meta.worktree);
     let same_worktree_path = terminal.get("worktreePath").and_then(Value::as_str).is_some_and(|path| {
-        path == meta.worktree || Path::new(path).canonicalize().ok()
-            .zip(Path::new(&meta.worktree).canonicalize().ok()).is_some_and(|(a, b)| a == b)
+        path == origin_path || Path::new(path).canonicalize().ok()
+            .zip(Path::new(origin_path).canonicalize().ok()).is_some_and(|(a, b)| a == b)
     });
     let same = terminal.get("handle").and_then(Value::as_str) == Some(session.terminal_handle.as_str())
         && terminal.get("incarnationId").and_then(Value::as_str) == Some(session.terminal_incarnation.as_str())
@@ -299,8 +301,8 @@ fi
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("meta.json"), json!({
             "id":"r1","project_id":"p1","type":"plan","mode":"decision","title":"Layout plan",
-            "branch":null,"commit":null,"worktree":"/w","agent":"codex","created_at":"now","version":"v1",
-            "agent_session":{"terminal_handle":"term_123","terminal_incarnation":"inc-1","worktree_id":"wt-1","thread_id":null}
+            "branch":null,"commit":null,"worktree":"/report","agent":"codex","created_at":"now","version":"v1",
+            "agent_session":{"terminal_handle":"term_123","terminal_incarnation":"inc-1","worktree_id":"repo::/w","thread_id":null}
         }).to_string()).unwrap();
         fs::write(dir.join("page.json"), json!({"mode":"decision","title":"Layout plan","question":"Which layout?",
             "options":[{"id":"a","title":"Grid","body":"Two columns"}]}).to_string()).unwrap();
@@ -308,7 +310,7 @@ fi
         let sent = temp.path().join("sent.txt");
         fs::write(&script, format!(r##"#!/bin/sh
 if [ "$2" = show ]; then
-  printf '%s\n' '{{"ok":true,"result":{{"terminal":{{"handle":"term_123","incarnationId":"inc-1","worktreeId":"wt-1","worktreePath":"/w","agentIdentity":"codex","connected":true,"writable":true}}}}}}'
+  printf '%s\n' '{{"ok":true,"result":{{"terminal":{{"handle":"term_123","incarnationId":"inc-1","worktreeId":"repo::/w","worktreePath":"/w","agentIdentity":"codex","connected":true,"writable":true}}}}}}'
 elif [ "$2" = send ]; then
   while [ "$#" -gt 0 ]; do
     if [ "$1" = --text ]; then shift; printf '%s' "$1" >> '{}'; break; fi

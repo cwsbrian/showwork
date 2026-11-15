@@ -37,13 +37,13 @@ class StoreTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_decision_delivery_uses_original_terminal_and_deduplicates(self):
-        meta = {"id": "r1", "project_id": "p1", "version": "v1", "title": "Layout", "worktree": "/w",
-                "agent": "codex", "agent_session": {"terminal_handle": "term_123", "terminal_incarnation": "inc-1", "worktree_id": "wt-1"}}
+        meta = {"id": "r1", "project_id": "p1", "version": "v1", "title": "Layout", "worktree": "/report",
+                "agent": "codex", "agent_session": {"terminal_handle": "term_123", "terminal_incarnation": "inc-1", "worktree_id": "repo::/w"}}
         folder = STORE.report_dir(meta)
         folder.mkdir(parents=True)
         page = {"question": "Which layout?", "options": [{"id": "grid", "title": "Grid", "body": "Two columns"}]}
         shown = Mock(returncode=0, stdout=json.dumps({"result": {"terminal": {"handle": "term_123", "incarnationId": "inc-1",
-            "worktreeId": "wt-1", "worktreePath": "/w", "agentIdentity": "codex", "connected": True, "writable": True}}}))
+            "worktreeId": "repo::/w", "worktreePath": "/w", "agentIdentity": "codex", "connected": True, "writable": True}}}))
         sent = Mock(returncode=0, stdout=json.dumps({"result": {"send": {"accepted": True}}}))
         with patch.dict(os.environ, {"SHOWWORK_ORCA_CLI": "/fake/orca"}), patch.object(STORE.subprocess, "run", side_effect=[shown, sent]) as run:
             result = STORE.deliver_decision(meta, page, "grid")
@@ -336,6 +336,33 @@ class StoreTests(unittest.TestCase):
             terminal["result"]["terminal"]["agentIdentity"] = "claude"
             with patch.object(STORE.subprocess, "run", return_value=CompletedProcess([], 0, json.dumps(terminal))):
                 self.assertIsNone(STORE.agent_session(self.tmp, "codex"))
+
+    def test_agent_session_accepts_another_worktree_in_same_repository(self):
+        from subprocess import CompletedProcess
+        repo = self.repo()
+        other = self.tmp / "other-worktree"
+        git("worktree", "add", "-b", "other", str(other), cwd=repo)
+        unrelated = self.tmp / "unrelated"
+        unrelated.mkdir()
+        git("init", cwd=unrelated)
+        handle = "term_12345678-1234-1234-1234-123456789abc"
+        worktree_id = "repo::" + str(repo)
+        terminal = {"result": {"terminal": {
+            "handle": handle, "worktreeId": worktree_id, "worktreePath": str(repo),
+            "agentIdentity": "codex", "incarnationId": "inc-1"}}}
+        real_run = subprocess.run
+
+        def run(command, **kwargs):
+            if command[0] == "git":
+                return real_run(command, **kwargs)
+            return CompletedProcess(command, 0, json.dumps(terminal))
+
+        with patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": handle, "ORCA_WORKTREE_ID": worktree_id,
+                                  "ORCA_CLI_BIN_DIR": str(self.tmp)}), patch.object(STORE.subprocess, "run", side_effect=run):
+            self.assertIsNotNone(STORE.agent_session(other, "codex"))
+            self.assertIsNone(STORE.agent_session(unrelated, "codex"))
+            terminal["result"]["terminal"]["worktreePath"] = str(other)
+            self.assertIsNone(STORE.agent_session(other, "codex"))
 
 
 if __name__ == "__main__":

@@ -111,8 +111,12 @@ def agent_session(project, agent):
     """Capture the exact Orca terminal that authored this report, when available."""
     handle = os.environ.get("ORCA_TERMINAL_HANDLE", "")
     worktree_id = os.environ.get("ORCA_WORKTREE_ID", "")
-    if (not re.fullmatch(r"term_[0-9a-f-]{36}", handle) or not worktree_id
-            or os.path.realpath(worktree_id.rsplit("::", 1)[-1]) != worktree_key(project)):
+    if not re.fullmatch(r"term_[0-9a-f-]{36}", handle) or "::" not in worktree_id:
+        return None
+    origin = os.path.realpath(worktree_id.rsplit("::", 1)[-1])
+    report_worktree = worktree_key(project)
+    if (origin != report_worktree
+            and project_identity(origin)["common_dir"] != project_identity(project)["common_dir"]):
         return None
     binary_dir = os.environ.get("ORCA_CLI_BIN_DIR")
     executable = str(Path(binary_dir) / "orca") if binary_dir else shutil.which("orca")
@@ -125,7 +129,7 @@ def agent_session(project, agent):
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
     if (terminal.get("handle") != handle or terminal.get("worktreeId") != worktree_id
-            or os.path.realpath(terminal.get("worktreePath") or "") != worktree_key(project)
+            or os.path.realpath(terminal.get("worktreePath") or "") != origin
             or terminal.get("agentIdentity") != agent or not terminal.get("incarnationId")):
         return None
     thread_id = (os.environ.get("CODEX_SESSION_ID") or os.environ.get("CODEX_THREAD_ID")) if agent == "codex" else os.environ.get("CLAUDE_SESSION_ID")
@@ -489,7 +493,8 @@ def deliver_decision(meta, page, choice):
         terminal = json.loads(shown.stdout).get("result", {}).get("terminal", {}) if shown.returncode == 0 else {}
         if not (terminal.get("handle") == handle and terminal.get("incarnationId") == session.get("terminal_incarnation")
                 and terminal.get("worktreeId") == session.get("worktree_id")
-                and os.path.realpath(terminal.get("worktreePath") or "") == os.path.realpath(meta["worktree"])
+                and os.path.realpath(terminal.get("worktreePath") or "") == os.path.realpath(
+                    session["worktree_id"].rsplit("::", 1)[-1] if "::" in session["worktree_id"] else meta["worktree"])
                 and terminal.get("agentIdentity") == meta["agent"] and terminal.get("connected") and terminal.get("writable")):
             raise ValueError("The original terminal has changed or closed.")
         option = next(item for item in page["options"] if item["id"] == choice)
