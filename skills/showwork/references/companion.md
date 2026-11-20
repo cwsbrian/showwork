@@ -11,7 +11,7 @@ The companion uses Python 3.11+ with no third-party runtime dependencies. It wor
 
 ## Show that work started
 
-As the first step of every Showwork command, before investigating, run:
+Before a continuation, inspect `companion.py tasks --project /absolute/project` and reuse a `task` id only when that earlier report is clearly part of the same user request. Otherwise start a new task. Then run:
 
 ```bash
 python3 /absolute/path/to/showwork/scripts/companion.py start \
@@ -19,6 +19,8 @@ python3 /absolute/path/to/showwork/scripts/companion.py start \
 ```
 
 It prints JSON with `directory` (the same temporary directory `path` returns), `run` and `app`. The Showwork app then lists the task as in progress with a spinner. Use the same `--type` you will publish with: `publish` replaces that working item with the report. Add `--title "short title"` only when you already know it. Running `start` again for the same type and worktree replaces the item rather than adding one. If you stop without publishing (the user cancels, or the task cannot produce a report), run `companion.py stop --project /absolute/project --type <type>`; an item that is never finished disappears from the app after three hours.
+
+`start` also returns `task`. For a continuation, pass `--task <earlier task id>` to `start`; its later `publish` inherits that id. For a later publish after a decision page ended the working run, pass `--task <same task id>` to `publish` explicitly. Keep this id in the task context across plan, result, review and verify commands. Do not reuse an id merely because the agent session or worktree is the same: one session can contain unrelated requests. Each publish stores an immutable version, and the app shows versions of one task under one list item.
 
 Write the report into one live document as its text becomes ready. Append short text chunks in order, including paragraph breaks:
 
@@ -102,7 +104,7 @@ python3 /absolute/skill/showwork/scripts/companion.py publish \
   --type result --agent claude --require-app
 ```
 
-Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the command's `--type`: `result` (showwork), `plan`, `review`, or `verify`. A decision page uses the type of the command that raised it, for example `--type plan` while planning. It prints JSON with `published` (version), `mode`, `report` (the report id), `project`, `path` and `app` (`opened` with `--require-app`). Keep the `report` id for `events`. The app updates automatically. Every publish creates a new report. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
+Pass `--agent claude` in Claude Code and `--agent codex` in Codex. Pass the command's `--type`: `result` (showwork), `plan`, `review`, or `verify`. A decision page uses the type of the command that raised it, for example `--type plan` while planning. It prints JSON with `published` (version), `mode`, `report` (the version's report id), `task` (the task id), `project`, `path` and `app` (`opened` with `--require-app`). Keep the `report` id for `events` and the `task` id for later versions. The app updates automatically. Keep report sources, screenshots and one-off scripts inside the returned temporary directory. The helper copies referenced raster images into its own assets folder and serves only those files, not the project directory.
 
 ### Decision page
 

@@ -12,7 +12,7 @@ The main deliverable is understanding the finished result: **what changed, how i
 
 Explain in the user's language with short sentences and familiar words a third-grade child could understand. Speak respectfully to an adult. Explain necessary technical terms immediately. Keep important failures and unchecked behavior visible; show the key changed files and why they matter, while placing commands and supporting detail behind optional browser sections.
 
-Start by running `companion.py start --project /absolute/project --type result --agent <claude|codex> --require-app` from the [companion](references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
+Use the [companion](references/companion.md#show-that-work-started) to reuse an earlier `task` id when this result belongs to the same request, then run `companion.py start --project /absolute/project --type result --agent <claude|codex> --require-app` (with `--task` for a continuation) so the Showwork app shows this task as in progress; publishing adds a version to that task. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
 
 As confirmed wording is ready, append short text chunks to the live document with `companion.py progress` as described in the companion guide. The user can watch the report being written. Publish the complete report at the end.
 

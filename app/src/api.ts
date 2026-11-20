@@ -3,7 +3,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import type { ReportMeta, RunningItem, SessionItem } from './model';
+import type { ReportMeta, ReportVersion, RunningItem, SessionItem } from './model';
 
 export type { ReportMeta, RunningItem, SessionItem };
 export type View = 'list' | 'flow';
@@ -27,6 +27,14 @@ export interface ReportDetail {
 export interface ReportRef {
   projectId: string;
   reportId: string;
+}
+
+export interface ReportPage {
+  reports: ReportMeta[];
+  hasMore: boolean;
+  branches: string[];
+  types: string[];
+  reportsByRun: Record<string, string>;
 }
 
 export interface CommentAnchor {
@@ -88,6 +96,8 @@ export interface ShowworkApi {
   installAppUpdate(onProgress: (progress: AppUpdateProgress) => void): Promise<void>;
   listProjects(): Promise<ProjectSummary[]>;
   listReports(projectId: string): Promise<ReportMeta[]>;
+  listReportsPage(projectId: string, offset: number, limit: number, branch: string, reportType: string): Promise<ReportPage>;
+  listReportVersions(projectId: string, reportId: string): Promise<ReportVersion[]>;
   listRunning(projectId: string): Promise<RunningItem[]>;
   listSessions(projectId: string, runId: string): Promise<SessionItem[]>;
   listAllSessions(projectId: string): Promise<SessionItem[]>;
@@ -156,6 +166,9 @@ function tauriApi(): ShowworkApi {
     },
     listProjects: () => invoke('list_projects'),
     listReports: (projectId) => invoke('list_reports', { projectId }),
+    listReportsPage: (projectId, offset, limit, branch, reportType) =>
+      invoke('list_reports_page', { projectId, offset, limit, branch, reportType }),
+    listReportVersions: (projectId, reportId) => invoke('list_report_versions', { projectId, reportId }),
     listRunning: (projectId) => invoke('list_running', { projectId }),
     listSessions: (projectId, runId) => invoke('list_sessions', { projectId, runId }),
     listAllSessions: (projectId) => invoke('list_all_sessions', { projectId }),
@@ -220,6 +233,8 @@ function mockApi(fixture: Fixture): ShowworkApi {
     Object.values(reports).flat().find((r) => r.id === reportId);
   const newestFirst = (list: ReportMeta[]) =>
     [...list].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const taskGroupKey = (r: ReportMeta) => `task:${r.worktree}:${r.taskId || r.id}`;
+  const versionsFor = (list: ReportMeta[]) => list.map((r) => ({id: r.id, reportType: r.type, title: r.title, createdAt: r.createdAt, read: !unread.has(r.id)}));
   const read = (k: string): string | null => {
     try { return localStorage.getItem(k); } catch { return null; }
   };
@@ -311,6 +326,31 @@ function mockApi(fixture: Fixture): ShowworkApi {
     },
     async listReports(projectId) {
       return newestFirst(reports[projectId] ?? []).map((r) => ({ ...r, read: !unread.has(r.id) }));
+    },
+    async listReportsPage(projectId, offset, limit, branch, reportType) {
+      failing('listReportsPage');
+      calls.push({ fn: 'listReportsPage', projectId, offset, limit, branch, reportType });
+      const all = newestFirst(reports[projectId] ?? []);
+      const groups = new Map<string, ReportMeta[]>();
+      for (const report of all) {
+        const key = taskGroupKey(report);
+        groups.set(key, [...(groups.get(key) ?? []), report]);
+      }
+      const filtered = [...groups.values()].filter((group) => group.some((r) =>
+        (!branch || (r.branch ?? '(no branch)') === branch) && (!reportType || r.type === reportType)));
+      return {
+        reports: filtered.slice(offset, offset + limit).map((group) => ({ ...group[0], read: group.every((r) => !unread.has(r.id)), versions: versionsFor(group.slice().reverse()) })),
+        hasMore: filtered.length > offset + limit,
+        branches: [...new Set(all.map((r) => r.branch ?? '(no branch)'))].sort(),
+        types: [...new Set(all.map((r) => r.type))].sort(),
+        reportsByRun: Object.fromEntries(all.slice().reverse().filter((r) => r.run).map((r) => [r.run!, r.id])),
+      };
+    },
+    async listReportVersions(projectId, reportId) {
+      const all = newestFirst(reports[projectId] ?? []);
+      const current = all.find((r) => r.id === reportId);
+      if (!current) throw new Error('Report not found');
+      return versionsFor(all.filter((r) => taskGroupKey(r) === taskGroupKey(current)).reverse());
     },
     async listRunning(projectId) {
       return [...(running[projectId] ?? [])];

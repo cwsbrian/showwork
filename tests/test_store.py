@@ -77,6 +77,17 @@ class StoreTests(unittest.TestCase):
         self.assertIsNone(STORE.current_run(meta["project_id"], meta["worktree"], "review"))
         self.assertIsNone(STORE.save_report(repo, page(), [], "review", "claude")["run"])
 
+    def test_task_id_connects_versions_across_report_types_without_merging_new_work(self):
+        repo = self.repo()
+        plan_run = STORE.start_run(repo, "plan", "claude")
+        plan = STORE.save_report(repo, page("Plan"), [], "plan", "claude")
+        self.assertEqual(plan["task_id"], plan_run["task_id"])
+        STORE.start_run(repo, "result", "claude", task_id=plan["task_id"])
+        result = STORE.save_report(repo, page("Result"), [], "result", "claude")
+        self.assertEqual(result["task_id"], plan["task_id"])
+        review = STORE.save_report(repo, page("Separate review"), [], "review", "claude")
+        self.assertNotEqual(review["task_id"], plan["task_id"])
+
     def test_finishing_an_older_run_keeps_a_newer_start(self):
         repo = self.repo()
         old = STORE.start_run(repo, "review", "claude")
@@ -177,7 +188,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(root.stat().st_mode & 0o777, 0o700)
         self.assertEqual((root / "projects").stat().st_mode & 0o777, 0o700)
 
-    def test_decision_open_until_newer_report_from_same_worktree(self):
+    def test_decision_open_until_newer_report_from_same_task(self):
         a, b = self.tmp / "a", self.tmp / "b"
         a.mkdir(), b.mkdir()
         d = STORE.save_report(a, page(mode="decision"), [], "decision", "x")
@@ -185,6 +196,8 @@ class StoreTests(unittest.TestCase):
         STORE.save_report(b, page(), [], "handoff", "x")
         self.assertTrue(STORE.is_open(d))
         STORE.save_report(a, page(), [], "handoff", "x")
+        self.assertTrue(STORE.is_open(d))
+        STORE.save_report(a, page(), [], "handoff", "x", task_id=d["task_id"])
         self.assertFalse(STORE.is_open(d))
 
     def test_worktree_is_git_top_level(self):
@@ -192,7 +205,7 @@ class StoreTests(unittest.TestCase):
         sub = repo / "sub"
         sub.mkdir()
         d = STORE.save_report(repo, page(mode="decision"), [], "decision", "x")
-        h = STORE.save_report(sub, page(), [], "handoff", "x")
+        h = STORE.save_report(sub, page(), [], "handoff", "x", task_id=d["task_id"])
         self.assertEqual(d["worktree"], os.path.realpath(repo))
         self.assertEqual(h["worktree"], d["worktree"])
         self.assertFalse(STORE.is_open(d))
@@ -207,7 +220,7 @@ class StoreTests(unittest.TestCase):
         a.mkdir(), b.mkdir()
         d = STORE.save_report(a, page(mode="decision"), [], "decision", "x")
         elsewhere = STORE.save_report(b, page(mode="decision"), [], "decision", "x")
-        h = STORE.save_report(a, page(), [], "handoff", "x")
+        h = STORE.save_report(a, page(), [], "handoff", "x", task_id=d["task_id"])
         marker = __import__("json").loads((STORE.report_dir(d) / "closed.json").read_text())
         self.assertEqual(marker["by"], h["id"])
         self.assertIn("time", marker)
@@ -217,7 +230,7 @@ class StoreTests(unittest.TestCase):
         self.assertFalse(STORE.is_open(d))
         self.assertTrue(STORE.is_open(elsewhere))
         # A later report keeps the first closer instead of rewriting the marker.
-        STORE.save_report(a, page(), [], "handoff", "x")
+        STORE.save_report(a, page(), [], "handoff", "x", task_id=d["task_id"])
         self.assertEqual(__import__("json").loads((STORE.report_dir(d) / "closed.json").read_text())["by"], h["id"])
 
     def test_closed_marker_failure_does_not_fail_publish(self):
@@ -232,7 +245,7 @@ class StoreTests(unittest.TestCase):
             return real(path, value)
 
         with patch.object(STORE, "write_json", failing):
-            h = STORE.save_report(plain, page(), [], "handoff", "x")
+            h = STORE.save_report(plain, page(), [], "handoff", "x", task_id=d["task_id"])
         self.assertTrue((STORE.report_dir(h) / "meta.json").is_file())
         self.assertFalse(STORE.is_open(d))
 

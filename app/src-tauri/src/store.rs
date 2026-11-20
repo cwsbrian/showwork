@@ -195,6 +195,29 @@ pub struct ReportMeta {
     pub chosen: bool,
     /// Filled by the `list_reports` command from the app state; the store itself does not know it.
     pub read: bool,
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub versions: Option<Vec<ReportVersion>>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportVersion {
+    pub id: String,
+    pub report_type: String,
+    pub title: String,
+    pub created_at: String,
+    pub read: bool,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportPage {
+    pub reports: Vec<ReportMeta>,
+    pub has_more: bool,
+    pub branches: Vec<String>,
+    pub types: Vec<String>,
+    pub reports_by_run: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -286,6 +309,18 @@ struct RawMeta {
     run: Option<String>,
     #[serde(default)]
     agent_session: Option<AgentSession>,
+    #[serde(default)]
+    task_id: Option<String>,
+}
+
+fn task_group_key(raw: &RawMeta) -> String {
+    let id = raw.task_id.as_deref().filter(|id| valid_id(id)).unwrap_or(&raw.id);
+    format!("task:{}:{}", raw.worktree, id)
+}
+
+fn decision_scope_key(raw: &RawMeta) -> String {
+    if raw.task_id.as_deref().is_some_and(valid_id) { task_group_key(raw) }
+    else { format!("worktree:{}", raw.worktree) }
 }
 
 /// Transport fields are tagged on disk and flattened into the frontend contract.
@@ -460,7 +495,7 @@ impl Store {
             .any(|event| event.get("version").and_then(|v| v.as_str()) == Some(meta.version.as_str()))
     }
 
-    /// `closed.json` in the report folder: Python writes it when a newer same-worktree report is
+    /// `closed.json` in the report folder: Python writes it when a newer report in the same task is
     /// published, so a decision stays closed even after that newer report is deleted.
     fn closed_marker(&self, project_id: &str, meta: &RawMeta) -> bool {
         self.projects_dir().join(project_id).join("reports").join(&meta.id).join("closed.json").exists()
@@ -471,12 +506,13 @@ impl Store {
         let raws = self.raw_reports(project_id);
         let mut latest: BTreeMap<String, String> = BTreeMap::new();
         for raw in &raws {
-            latest.insert(raw.worktree.clone(), raw.id.clone()); // oldest first, so the last wins
+            latest.insert(format!("worktree:{}", raw.worktree), raw.id.clone());
+            if raw.task_id.as_deref().is_some_and(valid_id) { latest.insert(task_group_key(raw), raw.id.clone()); }
         }
         let mut reports: Vec<ReportMeta> = raws
             .iter()
             .map(|raw| ReportMeta {
-                open: raw.mode == "decision" && latest.get(&raw.worktree) == Some(&raw.id) && !self.closed_marker(project_id, raw),
+                open: raw.mode == "decision" && latest.get(&decision_scope_key(raw)) == Some(&raw.id) && !self.closed_marker(project_id, raw),
                 chosen: self.has_choice(project_id, raw),
                 id: raw.id.clone(),
                 project_id: raw.project_id.clone(),
@@ -492,6 +528,8 @@ impl Store {
                 run: raw.run.clone(),
                 agent_session: raw.agent_session.clone(),
                 read: false,
+                task_id: raw.task_id.clone(),
+                versions: None,
             })
             .collect();
         reports.reverse();
@@ -549,6 +587,59 @@ impl Store {
     pub fn list_reports(&self, project_id: &str) -> Result<Vec<ReportMeta>, StoreError> {
         check_id(project_id)?;
         Ok(self.reports_with_state(project_id))
+    }
+
+    pub fn list_reports_page(&self, project_id: &str, offset: usize, limit: usize, branch: &str, report_type: &str) -> Result<ReportPage, StoreError> {
+        check_id(project_id)?;
+        let raws = self.raw_reports(project_id);
+        let mut latest = BTreeMap::new();
+        let mut branches = BTreeSet::new();
+        let mut types = BTreeSet::new();
+        let mut reports_by_run = BTreeMap::new();
+        for raw in &raws {
+            latest.insert(format!("worktree:{}", raw.worktree), raw.id.as_str());
+            if raw.task_id.as_deref().is_some_and(valid_id) { latest.insert(task_group_key(raw), raw.id.as_str()); }
+            branches.insert(raw.branch.as_deref().unwrap_or("(no branch)").to_string());
+            types.insert(raw.r#type.clone());
+            if let Some(run) = &raw.run { reports_by_run.insert(run.clone(), raw.id.clone()); }
+        }
+        let matches = |raw: &&RawMeta| {
+            (branch.is_empty() || raw.branch.as_deref().unwrap_or("(no branch)") == branch)
+                && (report_type.is_empty() || raw.r#type == report_type)
+        };
+        let mut grouped: BTreeMap<String, Vec<&RawMeta>> = BTreeMap::new();
+        for raw in &raws { grouped.entry(task_group_key(raw)).or_default().push(raw); }
+        let mut groups: Vec<_> = grouped.into_values().collect();
+        groups.sort_by(|a, b| b.last().unwrap().id.cmp(&a.last().unwrap().id));
+        let page: Vec<_> = groups.into_iter().filter(|group| group.iter().any(&matches))
+            .skip(offset).take(limit.saturating_add(1)).collect();
+        let has_more = page.len() > limit;
+        let reports = page.into_iter().take(limit).map(|group| {
+            let raw = group.last().unwrap();
+            let versions = group.iter().map(|item| ReportVersion { id: item.id.clone(),
+                report_type: item.r#type.clone(), title: item.title.clone(), created_at: item.created_at.clone(), read: false }).collect();
+            ReportMeta {
+            open: raw.mode == "decision" && latest.get(&decision_scope_key(raw)) == Some(&raw.id.as_str()) && !self.closed_marker(project_id, raw),
+            chosen: self.has_choice(project_id, raw),
+            id: raw.id.clone(), project_id: raw.project_id.clone(), r#type: raw.r#type.clone(),
+            mode: raw.mode.clone(), title: raw.title.clone(), branch: raw.branch.clone(),
+            commit: raw.commit.clone(), worktree: raw.worktree.clone(), agent: raw.agent.clone(),
+            created_at: raw.created_at.clone(), version: raw.version.clone(), run: raw.run.clone(),
+            agent_session: raw.agent_session.clone(), read: false, task_id: raw.task_id.clone(), versions: Some(versions),
+        }}).collect();
+        Ok(ReportPage { reports, has_more, branches: branches.into_iter().collect(),
+            types: types.into_iter().collect(), reports_by_run })
+    }
+
+    pub fn list_report_versions(&self, project_id: &str, report_id: &str) -> Result<Vec<ReportVersion>, StoreError> {
+        check_id(project_id)?;
+        check_id(report_id)?;
+        let raws = self.raw_reports(project_id);
+        let current = raws.iter().find(|raw| raw.id == report_id).ok_or(StoreError::NotFound)?;
+        let key = task_group_key(current);
+        Ok(raws.iter().filter(|raw| task_group_key(raw) == key).map(|raw| ReportVersion {
+            id: raw.id.clone(), report_type: raw.r#type.clone(), title: raw.title.clone(), created_at: raw.created_at.clone(), read: false,
+        }).collect())
     }
 
     fn find_meta(&self, project_id: &str, report_id: &str) -> Result<ReportMeta, StoreError> {
@@ -944,6 +1035,62 @@ mod tests {
     }
 
     #[test]
+    fn report_pages_filter_before_paging_and_keep_all_filter_choices() {
+        let (_tmp, store) = store();
+        add_project(&store, "p1", "alpha", "/r/.git", None);
+        for id in ["r01", "r02", "r03", "r04"] {
+            add_report(&store, "p1", id, "handoff", "/w", "v1");
+        }
+        let path = store.root.join("projects/p1/reports/r01/meta.json");
+        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        old["branch"] = json!("archive");
+        old["run"] = json!("run-old");
+        fs::write(&path, old.to_string()).unwrap();
+        let first = store.list_reports_page("p1", 0, 2, "", "").unwrap();
+        assert_eq!(first.reports.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["r04", "r03"]);
+        assert!(first.has_more);
+        assert_eq!(first.branches, ["archive", "main"]);
+        assert_eq!(first.reports_by_run.get("run-old").map(String::as_str), Some("r01"));
+        let second = store.list_reports_page("p1", 2, 2, "", "").unwrap();
+        assert_eq!(second.reports.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["r02", "r01"]);
+        assert!(!second.has_more);
+        let filtered = store.list_reports_page("p1", 0, 2, "archive", "plan").unwrap();
+        assert_eq!(filtered.reports[0].id, "r01");
+        assert!(!filtered.has_more);
+    }
+
+    #[test]
+    fn report_pages_group_versions_by_task_id() {
+        let (_tmp, store) = store();
+        add_project(&store, "p1", "alpha", "/r/.git", None);
+        for (id, kind) in [("r01", "plan"), ("r02", "result"), ("r03", "review"), ("r04", "review")] {
+            add_report(&store, "p1", id, "handoff", "/w", "v1");
+            let path = store.root.join("projects/p1/reports").join(id).join("meta.json");
+            let mut meta: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            meta["type"] = json!(kind);
+            meta["agent_session"] = json!({"terminal_handle":"term-1","terminal_incarnation":"inc-1",
+                "worktree_id":"repo::/w","thread_id":"thread-1"});
+            meta["task_id"] = json!("task-1");
+            fs::write(path, meta.to_string()).unwrap();
+        }
+        let page = store.list_reports_page("p1", 0, 30, "", "").unwrap();
+        assert_eq!(page.reports.len(), 1);
+        assert_eq!(page.reports[0].id, "r04");
+        assert_eq!(page.reports[0].versions.as_ref().unwrap().iter().map(|v| v.report_type.as_str()).collect::<Vec<_>>(),
+            ["plan", "result", "review", "review"]);
+        assert_eq!(store.list_report_versions("p1", "r02").unwrap().len(), 4);
+        assert_eq!(store.list_reports_page("p1", 0, 30, "", "plan").unwrap().reports.len(), 1);
+        add_report(&store, "p1", "r05", "handoff", "/w", "v1");
+        let path = store.root.join("projects/p1/reports/r05/meta.json");
+        let mut unrelated: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        unrelated["agent_session"] = json!({"terminal_handle":"term-1","terminal_incarnation":"inc-1",
+            "worktree_id":"repo::/w","thread_id":"thread-1"});
+        unrelated["task_id"] = json!("task-2");
+        fs::write(path, unrelated.to_string()).unwrap();
+        assert_eq!(store.list_reports_page("p1", 0, 30, "", "").unwrap().reports.len(), 2);
+    }
+
+    #[test]
     fn report_comments_persist_across_types_and_reject_stale_or_invalid_input() {
         let (_tmp, store) = store();
         add_project(&store, "p1", "alpha", "/r/.git", None);
@@ -1267,6 +1414,21 @@ mod tests {
         let reports = s.list_reports("p1").unwrap();
         let view: Vec<_> = reports.iter().map(|r| (r.id.as_str(), r.open, r.chosen)).collect();
         assert_eq!(view, vec![("r-04", true, true), ("r-03", false, false), ("r-02", true, false), ("r-01", false, false)]);
+    }
+
+    #[test]
+    fn new_task_does_not_close_another_tasks_decision() {
+        let (_tmp, store) = store();
+        add_project(&store, "p1", "alpha", "/r/.git", None);
+        for (id, task, mode) in [("r01", "task-a", "decision"), ("r02", "task-b", "handoff"), ("r03", "task-a", "handoff")] {
+            add_report(&store, "p1", id, mode, "/w", "v1");
+            let path = store.root.join("projects/p1/reports").join(id).join("meta.json");
+            let mut meta: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            meta["task_id"] = json!(task);
+            fs::write(path, meta.to_string()).unwrap();
+            if id == "r02" { assert!(store.list_reports("p1").unwrap().iter().find(|r| r.id == "r01").unwrap().open); }
+        }
+        assert!(!store.list_reports("p1").unwrap().iter().find(|r| r.id == "r01").unwrap().open);
     }
 
     #[test]

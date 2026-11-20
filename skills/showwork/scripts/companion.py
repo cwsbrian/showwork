@@ -240,7 +240,7 @@ def open_app(foreground=False):
     return "opened" if result.returncode == 0 else "missing"
 
 
-def publish(project, source, report_type=None, agent=None):
+def publish(project, source, report_type=None, agent=None, task_id=None):
     report_type = report_type or "result"
     if report_type not in REPORT_TYPES:
         raise ValueError(f"type must be one of {', '.join(REPORT_TYPES)}")
@@ -267,7 +267,7 @@ def publish(project, source, report_type=None, agent=None):
                 raise ValueError(f"{file['path']} code excerpt is too long; keep only the lines explained in this section")
     page["version"] = secrets.token_hex(12)
     page["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    meta = store.save_report(project, page, images, report_type, store.detect_agent(agent))
+    meta = store.save_report(project, page, images, report_type, store.detect_agent(agent), task_id)
     return {**page, "report": meta}
 
 
@@ -398,7 +398,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     sub = cli.add_subparsers(dest="action", required=True)
-    for name in ["path", "start", "progress", "stop", "serve", "publish", "events", "comments"]:
+    for name in ["path", "start", "progress", "stop", "serve", "publish", "events", "comments", "tasks"]:
         command = sub.add_parser(name)
         command.add_argument("--project", required=True, type=Path)
         if name in ("start", "progress", "stop"):
@@ -408,6 +408,7 @@ def main():
         if name == "start":
             command.add_argument("--agent", choices=["claude", "codex"])
             command.add_argument("--title")
+            command.add_argument("--task", help="Reuse a task id from an earlier report")
             command.add_argument("--require-app", action="store_true")
         if name == "serve":
             command.add_argument("--port", type=int, default=0)
@@ -416,6 +417,7 @@ def main():
             command.add_argument("--file", required=True, type=Path)
             command.add_argument("--type", choices=REPORT_TYPES)
             command.add_argument("--agent", choices=["claude", "codex"])
+            command.add_argument("--task", help="Reuse a task id from an earlier report or decision")
             command.add_argument("--require-app", action="store_true")
         if name in ("events", "comments"):
             command.add_argument("--report")
@@ -457,9 +459,9 @@ def main():
             store.cleanup_sessions(store.project_identity(args.project)["id"])
             root = directory(args.project)
             root.mkdir(exist_ok=True)
-            run = store.start_run(args.project, args.type, store.detect_agent(args.agent), args.title)
+            run = store.start_run(args.project, args.type, store.detect_agent(args.agent), args.title, args.task)
             store.cleanup_sessions(store.project_identity(args.project)["id"])
-            print(json.dumps({"directory": str(root), "run": run["id"], "type": run["type"], "app": app}))
+            print(json.dumps({"directory": str(root), "run": run["id"], "task": run["task_id"], "type": run["type"], "app": app}))
         elif args.action == "stop":
             identity = store.project_identity(args.project)
             run_id = store.finish_run(identity["id"], store.worktree_key(args.project), args.type)
@@ -491,10 +493,20 @@ def main():
             app = open_app(foreground=args.require_app)
             if args.require_app and app != "opened":
                 raise ValueError("Showwork app is unavailable; the report must appear in the app")
-            page = publish(args.project, args.file, args.type, args.agent)
+            page = publish(args.project, args.file, args.type, args.agent, args.task)
             meta = page["report"]
-            print(json.dumps({"published": page["version"], "mode": page["mode"], "report": meta["id"],
+            print(json.dumps({"published": page["version"], "mode": page["mode"], "report": meta["id"], "task": meta["task_id"],
                               "project": meta["project_id"], "path": str(store.report_dir(meta)), "app": app}))
+        elif args.action == "tasks":
+            recent = {}
+            for meta in worktree_reports(args.project):
+                task = meta.get("task_id") or meta["id"]
+                recent.pop(task, None)
+                recent[task] = {
+                    "task": task, "latest_report": meta["id"],
+                    "title": meta["title"], "type": meta["type"], "created_at": meta["created_at"],
+                }
+            print(json.dumps({"tasks": list(recent.values())[-10:]}, ensure_ascii=False))
         elif args.action == "events":
             if args.report:
                 meta = next((item for item in worktree_reports(args.project) if item["id"] == args.report), None)

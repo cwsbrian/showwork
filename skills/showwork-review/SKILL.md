@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Use only for an explicitly invoked Showwork review command. Ordinary requests and discussion about this package do not activate it. This single review covers the coding session and its resulting change, including adversarial checks. Do not edit production code or apply fixes unless the user asked. Preserve local changes and the user's authorization boundaries.
 
-Start `companion.py start --project /absolute/project --type review --agent <claude|codex> --require-app` through the [companion guide](../showwork/references/companion.md#show-that-work-started). This is the one public Showwork review workflow. If the Showwork app cannot open, report that limit rather than moving the walkthrough into a separate browser or simulator. Append short, confirmed findings with `progress` as they are validated, and publish one review in the app.
+Use the [companion guide](../showwork/references/companion.md#show-that-work-started) to reuse the reviewed task's `task` id, then start `companion.py start --project /absolute/project --type review --agent <claude|codex> --require-app --task <task id>` when that id is known. This is the one public Showwork review workflow. If the Showwork app cannot open, report that limit rather than moving the walkthrough into a separate browser or simulator. Append short, confirmed findings with `progress` as they are validated, and publish one review version in the app.
 
 ## Establish the session, change, and rules
 

@@ -275,6 +275,9 @@ export function createPlanComments(
     input.placeholder = 'Write a comment…';
     input.setAttribute('aria-label', 'Comment');
     input.maxLength = 20000;
+    const hint = document.createElement('small');
+    hint.className = 'plan-comment-shortcut';
+    hint.textContent = 'Enter to add · Ctrl+Enter for a new line';
     const actions = document.createElement('div');
     actions.className = 'plan-comment-actions';
     const cancel = button('Cancel', 'plan-comment-cancel');
@@ -300,8 +303,17 @@ export function createPlanComments(
         submit.disabled = false;
       }
     };
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      if (event.ctrlKey && !event.altKey && !event.metaKey) {
+        input.setRangeText('\n', input.selectionStart, input.selectionEnd, 'end');
+        return;
+      }
+      if (!submit.disabled) submit.click();
+    });
     actions.append(cancel, submit);
-    box.append(title, quote, input, actions, status);
+    box.append(title, quote, input, hint, actions, status);
     placePopover(box, rect);
     input.focus();
   }

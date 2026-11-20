@@ -19,7 +19,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
 use state::{UiState, View};
-use store::{CommentAnchor, FeedbackStatus, PlanNote, ProjectSummary, ReportComment, ReportDetail, ReportMeta, RunningItem, SessionItem, Store};
+use store::{CommentAnchor, FeedbackStatus, PlanNote, ProjectSummary, ReportComment, ReportDetail, ReportMeta, ReportPage, ReportVersion, RunningItem, SessionItem, Store};
 
 type Ui = Mutex<UiState>;
 
@@ -74,6 +74,27 @@ fn list_reports(store: State<Store>, ui: State<Ui>, project_id: String) -> Resul
         r.read = ui.read.contains(&r.id);
     }
     Ok(reports)
+}
+
+#[tauri::command]
+fn list_reports_page(store: State<Store>, ui: State<Ui>, project_id: String, offset: usize, limit: usize, branch: String, report_type: String) -> Result<ReportPage, String> {
+    let mut page = store.list_reports_page(&project_id, offset, limit.min(500), &branch, &report_type).map_err(err)?;
+    let ui = lock(&ui);
+    for report in &mut page.reports {
+        if let Some(versions) = &mut report.versions {
+            for version in versions.iter_mut() { version.read = ui.read.contains(&version.id); }
+            report.read = versions.iter().all(|version| version.read);
+        } else { report.read = ui.read.contains(&report.id); }
+    }
+    Ok(page)
+}
+
+#[tauri::command]
+fn list_report_versions(store: State<Store>, ui: State<Ui>, project_id: String, report_id: String) -> Result<Vec<ReportVersion>, String> {
+    let mut versions = store.list_report_versions(&project_id, &report_id).map_err(err)?;
+    let ui = lock(&ui);
+    for version in &mut versions { version.read = ui.read.contains(&version.id); }
+    Ok(versions)
 }
 
 #[tauri::command]
@@ -314,6 +335,8 @@ pub fn run() {
             app_revision,
             list_projects,
             list_reports,
+            list_reports_page,
+            list_report_versions,
             list_running,
             delete_running,
             list_sessions,

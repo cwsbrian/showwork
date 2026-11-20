@@ -94,6 +94,50 @@ async function waitServer() {
   const footer = await autoPanel.boundingBox();
   assert.ok(footer && Math.abs(footer.y + footer.height - 800) < 2, 'update notice stays at the bottom left');
   await autoContext.close();
+  const many = Array.from({length: 65}, (_, index) => meta(
+    `bulk-${String(index).padStart(2, '0')}`, 'result', index === 0 ? 'archive' : 'main',
+    new Date(Date.UTC(2026, 0, 1 + index)).toISOString(),
+  ));
+  const pagingContext = await browser.newContext({viewport: {width: 1280, height: 800}});
+  await pagingContext.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, {...fixture, reports: {...fixture.reports, a: many}});
+  const pagingPage = await pagingContext.newPage();
+  await pagingPage.goto(URL_BASE);
+  await pagingPage.waitForFunction(() => document.querySelectorAll('.item[data-report-id]').length === 30);
+  assert.equal(await pagingPage.evaluate(() => window.__showworkMock.calls.filter(c => c.fn === 'listReportsPage').length), 1);
+  await pagingPage.locator('#middle').evaluate(el => { el.scrollTop = el.scrollHeight; });
+  await pagingPage.waitForFunction(() => document.querySelectorAll('.item[data-report-id]').length === 60);
+  await pagingPage.getByRole('button', {name: 'Filters'}).click();
+  await pagingPage.getByLabel('Branch').selectOption('archive');
+  await pagingPage.locator('.item[data-report-id="bulk-00"]').waitFor();
+  assert.equal(await pagingPage.locator('.item[data-report-id]').count(), 1);
+  assert.ok(await pagingPage.evaluate(() => window.__showworkMock.calls.some(c => c.fn === 'listReportsPage' && c.branch === 'archive' && c.offset === 0)));
+  await pagingContext.close();
+  const groupSession = {terminalHandle: 'term-group', terminalIncarnation: 'inc-group', worktreeId: 'worktree-group', threadId: 'thread-group'};
+  const grouped = [
+    meta('group-plan', 'plan', 'main', '2026-03-01T00:00:00Z', {title: 'Grouped plan', agentSession: groupSession, taskId: 'task-group'}),
+    meta('group-result', 'result', 'main', '2026-03-02T00:00:00Z', {title: 'Grouped result', agentSession: groupSession, taskId: 'task-group'}),
+    meta('group-review-1', 'review', 'main', '2026-03-03T00:00:00Z', {title: 'First review', agentSession: groupSession, taskId: 'task-group'}),
+    meta('group-review-2', 'review', 'main', '2026-03-04T00:00:00Z', {title: 'Second review', agentSession: groupSession, taskId: 'task-group'}),
+  ];
+  const groupContext = await browser.newContext({viewport: {width: 1280, height: 800}});
+  await groupContext.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, {...fixture,
+    reports: {...fixture.reports, a: grouped}, unread: ['group-plan'], pages: {...fixture.pages,
+      'group-plan': handoff('Grouped plan', false), 'group-result': handoff('Grouped result', false),
+      'group-review-1': handoff('First review', false), 'group-review-2': handoff('Second review', false)},
+  });
+  const groupPage = await groupContext.newPage();
+  await groupPage.goto(URL_BASE);
+  await groupPage.locator('.item[data-report-id="group-review-2"]').waitFor();
+  assert.equal(await groupPage.locator('.item[data-report-id]').count(), 1);
+  assert.equal(await groupPage.locator('.version-count').textContent(), '4 versions');
+  assert.ok(await groupPage.locator('.item[data-report-id="group-review-2"]').evaluate(el => el.classList.contains('unread')));
+  await groupPage.locator('.item[data-report-id="group-review-2"]').click();
+  await groupPage.getByRole('navigation', {name: 'Report versions'}).getByRole('button', {name: 'Review 2'}).waitFor();
+  await groupPage.getByRole('navigation', {name: 'Report versions'}).getByRole('button', {name: 'Plan'}).click();
+  await groupPage.getByRole('heading', {name: 'Grouped plan'}).waitFor();
+  assert.equal(await groupPage.locator('.item[data-report-id="group-review-2"]').getAttribute('aria-current'), 'true');
+  await groupPage.waitForFunction(() => !document.querySelector('.item[data-report-id="group-review-2"]')?.classList.contains('unread'));
+  await groupContext.close();
   await page.evaluate(() => { window.__showworkMock.repositoryRevision = 'remote-revision'; });
   await updatePanel.getByRole('button', {name: 'Check for updates'}).click();
   await updatePanel.getByText(/The matching signed app build is not published yet/).waitFor();
@@ -182,12 +226,17 @@ async function waitServer() {
   await page.mouse.up();
   await composer.waitFor();
   assert.equal(await page.locator('#report .plan-comment-mark.preview').count(), 1);
-  await composer.getByRole('textbox', {name: 'Comment'}).fill('Please clarify the rollout step.');
-  await composer.getByRole('button', {name: 'Add comment'}).click();
+  const commentInput = composer.getByRole('textbox', {name: 'Comment'});
+  await commentInput.fill('Please clarify the rollout step.');
+  await commentInput.press('Control+Enter');
+  await commentInput.type('Include timing.');
+  assert.equal(await commentInput.inputValue(), 'Please clarify the rollout step.\nInclude timing.');
+  await commentInput.press('Enter');
   await page.locator('.plan-comment-pin').first().waitFor();
   assert.equal(await page.locator('.plan-comment-mark').count(), 1);
   assert.equal(await page.locator('.plan-comment-mark.preview').count(), 0);
   assert.equal((await page.evaluate(() => window.__showworkMock.calls)).at(-1).fn, 'addComment');
+  assert.equal((await page.evaluate(() => window.__showworkMock.calls)).at(-1).body, 'Please clarify the rollout step.\nInclude timing.');
   // The HTML visual is an iframe: selection there must open the same composer.
   const visual = page.frameLocator('#report .section-grid iframe').locator('p');
   await visual.evaluate(el => {
@@ -533,7 +582,7 @@ async function waitServer() {
   await page.getByRole('button', {name: 'Choose this option'}).click();
   await page.getByText('Choice sent to the original session.').waitFor();
   const calls = await page.evaluate(() => window.__showworkMock.calls);
-  assert.deepEqual(calls.at(-1), {fn: 'submitChoice', projectId: 'a', reportId: 'e-decide1', version: 'v-e-decide1', choice: 'y'});
+  assert.deepEqual(calls.filter(c => c.fn === 'submitChoice').at(-1), {fn: 'submitChoice', projectId: 'a', reportId: 'e-decide1', version: 'v-e-decide1', choice: 'y'});
   assert.equal(await page.locator('.pane-head .needs-choice').count(), 0);
   // the list item drops its tag too
   await page.waitForFunction(() => !document.querySelector('.item[data-report-id="e-decide1"] .needs-choice'));

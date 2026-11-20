@@ -12,7 +12,7 @@ Determine what the current result demonstrably does. Use the user's criteria and
 
 Explain in the user's language with short sentences and everyday words a third-grade child could understand, while speaking respectfully to an adult. Lead with what changed and why it helps; explain unavoidable technical terms immediately, keep chat brief, and put code paths/commands and deeper detail behind optional browser details. Keep important risks, failures and unchecked behavior visible; simplify wording, not facts.
 
-Start by running `companion.py start --project /absolute/project --type verify --agent <claude|codex> --require-app` from the [companion](../showwork/references/companion.md#show-that-work-started) so the Showwork app shows this task as in progress; publishing replaces it with the report. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
+Use the [companion](../showwork/references/companion.md#show-that-work-started) to reuse the verified task's `task` id when known, then run `companion.py start --project /absolute/project --type verify --agent <claude|codex> --require-app` (with `--task` for a continuation) so the Showwork app shows this task as in progress; publishing adds a version to that task. If the app is unavailable, explain the limitation instead of opening a separate browser or simulator.
 
 Append completed check results as short text chunks to the live document with `companion.py progress` as they are observed; see the companion guide. Publish the complete verification at the end.
 

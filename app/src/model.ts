@@ -20,6 +20,16 @@ export interface ReportMeta {
   open: boolean;
   chosen: boolean;
   read?: boolean;
+  taskId?: string | null;
+  versions?: ReportVersion[];
+}
+
+export interface ReportVersion {
+  id: string;
+  reportType: string;
+  title: string;
+  createdAt: string;
+  read?: boolean;
 }
 
 interface SessionCommon {

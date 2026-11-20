@@ -89,10 +89,10 @@ class CompanionTest(unittest.TestCase):
                     COMPANION.directory(self.project)
         self.assertEqual(list(self.project.iterdir()), [])
 
-    def publish(self, page):
+    def publish(self, page, task_id=None):
         source = self.project / "page-source.json"
         source.write_text(json.dumps(page))
-        return COMPANION.publish(self.project, source)
+        return COMPANION.publish(self.project, source, task_id=task_id)
 
     def get(self, path):
         return self.opener.open(self.server.origin + path, timeout=3)
@@ -148,7 +148,7 @@ class CompanionTest(unittest.TestCase):
 
     def test_stale_selection_cannot_answer_revised_question(self):
         old = self.publish(DECISION)
-        self.publish(DECISION)
+        self.publish(DECISION, task_id=old["report"]["task_id"])
         with self.assertRaises(HTTPError) as failure:
             self.post({"version": old["version"], "choice": "board"})
         self.assertEqual(failure.exception.code, 409)
@@ -335,6 +335,19 @@ class CompanionTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(SCRIPT), *args, "--project", str(project or self.project)],
                               capture_output=True, text=True, timeout=10, env=env)
 
+    def test_cli_reuses_task_across_plan_and_review_versions(self):
+        source = self.project / "report.json"
+        source.write_text(json.dumps(HANDOFF))
+        started = json.loads(self.cli("start", "--type", "plan", "--agent", "codex").stdout)
+        first = json.loads(self.cli("publish", "--type", "plan", "--agent", "codex", "--file", str(source)).stdout)
+        self.assertEqual(first["task"], started["task"])
+        tasks = json.loads(self.cli("tasks").stdout)["tasks"]
+        self.assertEqual(tasks[-1]["task"], first["task"])
+        continued = json.loads(self.cli("start", "--type", "review", "--agent", "codex", "--task", first["task"]).stdout)
+        second = json.loads(self.cli("publish", "--type", "review", "--agent", "codex", "--file", str(source)).stdout)
+        self.assertEqual(continued["task"], second["task"])
+        self.assertEqual(second["task"], first["task"])
+
     def test_start_shows_a_working_marker_until_publish_or_stop(self):
         started = self.cli("start", "--type", "review", "--agent", "claude", "--title", "Login review")
         self.assertEqual(started.returncode, 0, started.stderr)
@@ -440,13 +453,13 @@ class CompanionTest(unittest.TestCase):
             out = json.loads(self.cli("events", "--report", decision["id"], project=sub).stdout)
             self.assertEqual((out["report"], out["open"]), (decision["id"], True))
             source.write_text(json.dumps(HANDOFF))
-            COMPANION.publish(sub, source)
+            COMPANION.publish(sub, source, task_id=decision["task_id"])
             out = json.loads(self.cli("events", "--report", decision["id"], project=repo).stdout)
             self.assertEqual((out["report"], out["open"]), (decision["id"], False))
 
     def test_closed_decision_rejects_choice(self):
         decision = self.publish(DECISION)
-        self.publish(HANDOFF)
+        self.publish(HANDOFF, task_id=decision["report"]["task_id"])
         with self.assertRaises(HTTPError) as failure:
             self.post({"version": decision["version"], "choice": "list"})
         self.assertEqual(failure.exception.code, 409)

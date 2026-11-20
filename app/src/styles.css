@@ -161,13 +161,21 @@ button { font: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .spinner::before, .spinner::after { animation: none; width: 8px; opacity: 1; } }
 .unread-dot { order: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; align-self: center; }
 .item-sub { font-size: 12px; color: var(--muted); order: 3; }
+.version-count { order: 4; font-size: 11px; color: var(--accent); background: #e8f5ed; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .type-tag { font-size: 11px; font-weight: 700; color: var(--accent); order: 1; }
 .needs-choice { font-size: 11px; font-weight: 700; color: #8a4b00; background: #fff1d6; border-radius: 999px; padding: 0 8px; order: 4; }
 .flow-branch { margin-bottom: 14px; }
 .flow-branch h3 { font-size: 13px; margin: 4px 8px; color: var(--muted); }
 .flow-chain { border-left: 2px solid var(--line); margin-left: 12px; padding-left: 6px; }
+.load-more { display: block; width: calc(100% - 16px); margin: 10px 8px 18px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--accent); }
+.load-more:hover:not(:disabled) { background: var(--wash); }
+.load-more:disabled { color: var(--muted); cursor: default; }
 
 .pane-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.report-versions { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.report-versions button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; color: var(--muted); background: #fff; font-size: 12px; }
+.report-versions button:hover { background: var(--wash); }
+.report-versions button[aria-current="page"] { color: var(--accent); border-color: var(--accent); background: #e8f5ed; font-weight: 700; }
 .pane-head .meta-type { color: var(--accent); font-weight: 700; }
 .plan-comment-hint { margin-left: auto; color: #89510b; font-size: 12px; }
 .agent-session-status { margin-left: auto; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #edf0ef; color: #586b67; }
@@ -189,6 +197,7 @@ button { font: inherit; cursor: pointer; }
 .plan-comment-pop p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .plan-comment-pop textarea { display: block; width: 100%; min-height: 94px; resize: vertical; padding: 9px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: var(--ink); }
 .plan-comment-pop textarea:focus { outline: 2px solid #d48c13; }
+.plan-comment-shortcut { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .plan-comment-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .plan-comment-actions button { padding: 7px 11px; font-size: 13px; }
 .plan-comment-cancel { background: var(--wash); color: var(--ink); }

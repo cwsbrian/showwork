@@ -208,7 +208,7 @@ def cleanup_sessions(project_id, run_id=None):
         raise ValueError("Session cleanup failed: " + "; ".join(str(error) for error in errors))
 
 
-def save_report(project, page, images, report_type, agent):
+def save_report(project, page, images, report_type, agent, task_id=None):
     project = Path(project).expanduser()
     identity = project_identity(project)
     project_dir = store_root() / "projects" / identity["id"]
@@ -220,6 +220,8 @@ def save_report(project, page, images, report_type, agent):
     state = git_state(project)
     worktree = worktree_key(project)
     run = current_run(identity["id"], worktree, report_type)
+    if task_id is not None and not ID_PATTERN.fullmatch(task_id):
+        raise ValueError("Invalid task id")
     while True:
         report_id = new_report_id(datetime.now(timezone.utc))
         pending = reports / (".pending-" + report_id)
@@ -238,6 +240,7 @@ def save_report(project, page, images, report_type, agent):
                 "worktree": worktree, "agent": agent, "run": run["id"] if run else None,
                 "agent_session": (run.get("agent_session") if run else None) or agent_session(project, agent),
                 "created_at": page.get("published_at") or now.isoformat(), "version": page["version"],
+                "task_id": task_id or (run.get("task_id") if run else None) or report_id,
             }
             write_json(pending / "page.json", page)
             write_json(pending / "meta.json", meta)
@@ -302,12 +305,12 @@ def append_draft_text(project, report_type, text):
         return {"run": run["id"], "revision": run["revision"]}
 
 
-def start_run(project, report_type, agent, title=None):
+def start_run(project, report_type, agent, title=None, task_id=None):
     with simulator_lifecycle_lock():
-        return _start_run(project, report_type, agent, title)
+        return _start_run(project, report_type, agent, title, task_id)
 
 
-def _start_run(project, report_type, agent, title=None):
+def _start_run(project, report_type, agent, title=None, task_id=None):
     """Record that an agent started a report, so the app can show it as in progress.
     Each start is a new run; older markers of the same worktree and type are replaced."""
     project = Path(project).expanduser()
@@ -319,8 +322,11 @@ def _start_run(project, report_type, agent, title=None):
     state = git_state(project)
     worktree = worktree_key(project)
     now = datetime.now(timezone.utc)
+    if task_id is not None and not ID_PATTERN.fullmatch(task_id):
+        raise ValueError("Invalid task id")
+    run_id = new_report_id(now)
     run = {
-        "id": new_report_id(now), "project_id": identity["id"], "type": report_type, "title": title or None,
+        "id": run_id, "task_id": task_id or run_id, "project_id": identity["id"], "type": report_type, "title": title or None,
         "branch": state["branch"], "worktree": worktree, "agent": agent,
         "started_at": now.isoformat(timespec="seconds"),
         "agent_session": agent_session(project, agent),
@@ -357,7 +363,7 @@ def _finish_run(project_id, worktree, report_type, up_to_id=None):
 
 
 def close_older_decisions(newer):
-    """Mark older decisions from the same worktree closed, so deleting the newer report cannot reopen them."""
+    """Close older decisions in this task; retain legacy same-worktree behavior."""
     try:
         marker = {"by": newer["id"], "time": datetime.now(timezone.utc).isoformat()}
         older = list_reports(newer["project_id"])
@@ -366,7 +372,8 @@ def close_older_decisions(newer):
     for meta in older:
         try:
             if (str(meta.get("id", "")) >= newer["id"] or meta.get("mode") != "decision"
-                    or meta.get("worktree") != newer.get("worktree")):
+                    or meta.get("worktree") != newer.get("worktree")
+                    or (meta.get("task_id") and meta.get("task_id") != newer.get("task_id"))):
                 continue
             path = report_dir(meta) / "closed.json"
             # Skip a report the app is deleting right now, so the marker cannot keep its folder alive.
@@ -409,6 +416,7 @@ def is_open(meta):
     if (report_dir(meta) / "closed.json").exists():
         return False
     return not any(other["id"] > meta["id"] and other.get("worktree") == meta.get("worktree")
+                   and (not meta.get("task_id") or other.get("task_id") == meta.get("task_id"))
                    for other in list_reports(meta["project_id"]))
 
 

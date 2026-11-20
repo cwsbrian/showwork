@@ -1,5 +1,5 @@
 import type { View } from '../api';
-import { branchGroups, filterReports, NO_BRANCH, ReportMeta, RunningItem, typeLabel } from '../model';
+import { branchGroups, NO_BRANCH, ReportMeta, RunningItem, typeLabel } from '../model';
 import { showMenu } from './menu';
 
 export interface MiddleHandlers {
@@ -9,12 +9,25 @@ export interface MiddleHandlers {
   remove(reportId: string): void;
   removeRunning(runId: string): void;
   removeStopped(runId: string): void;
+  filterChanged(): void;
+  loadMore(): void;
+}
+
+export interface ListPageState {
+  branches: string[];
+  types: string[];
+  hasMore: boolean;
+  loadingMore: boolean;
 }
 
 export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
   const filter = { branch: '', type: '' };
   let lastProject: string | null = null;
   let filterOpen = false;
+  container.addEventListener('scroll', () => {
+    if (last && !last.loading && last.page.hasMore && !last.page.loadingMore
+      && container.scrollTop + container.clientHeight >= container.scrollHeight - 180) h.loadMore();
+  });
 
   const closeFilters = (focusButton: boolean) => {
     if (!filterOpen) return;
@@ -69,17 +82,23 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
     b.type = 'button';
     b.className = r.read ? 'item' : 'item unread';
     b.dataset.reportId = r.id;
-    if (r.id === selectedId) b.setAttribute('aria-current', 'true');
+    if (r.id === selectedId || r.versions?.some((version) => version.id === selectedId)) b.setAttribute('aria-current', 'true');
     const tag = document.createElement('span');
     tag.className = 'type-tag type-' + r.type;
     tag.textContent = typeLabel(r.type);
     const title = document.createElement('span');
     title.className = 'item-title';
-    title.textContent = r.title;
+    title.textContent = r.versions?.slice().reverse().find((version) => version.reportType === 'plan')?.title ?? r.versions?.[0]?.title ?? r.title;
     const sub = document.createElement('span');
     sub.className = 'item-sub';
     sub.textContent = new Date(r.createdAt).toLocaleString();
     b.append(tag, title, sub);
+    if ((r.versions?.length ?? 0) > 1) {
+      const count = document.createElement('span');
+      count.className = 'version-count';
+      count.textContent = `${r.versions!.length} versions`;
+      b.append(count);
+    }
     if (!r.read) {
       const dot = document.createElement('span');
       dot.className = 'unread-dot';
@@ -126,15 +145,16 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
       : [{label: 'Remove from list', run: () => h.removeRunning(r.id)}]);
   }
 
-  let last: { projectId: string | null; reports: ReportMeta[]; view: View; selectedId: string | null; loading: boolean; running: RunningItem[]; selectedRunId: string | null } | null = null;
+  let last: { projectId: string | null; reports: ReportMeta[]; view: View; selectedId: string | null; loading: boolean; running: RunningItem[]; selectedRunId: string | null; page: ListPageState } | null = null;
 
-  function render(projectId: string | null, reports: ReportMeta[], view: View, selectedId: string | null, loading = false, running: RunningItem[] = [], selectedRunId: string | null = null) {
-    last = { projectId, reports, view, selectedId, loading, running, selectedRunId };
+  function render(projectId: string | null, reports: ReportMeta[], view: View, selectedId: string | null, loading = false, running: RunningItem[] = [], selectedRunId: string | null = null, page: ListPageState = {branches: [], types: [], hasMore: false, loadingMore: false}) {
+    last = { projectId, reports, view, selectedId, loading, running, selectedRunId, page };
     if (projectId !== lastProject) {
       filter.branch = '';
       filter.type = '';
       lastProject = projectId;
     }
+    const scrollTop = container.scrollTop;
     container.replaceChildren();
     const bar = document.createElement('div');
     bar.className = 'toolbar';
@@ -150,16 +170,16 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
       b.onclick = () => h.setView(v);
       seg.append(b);
     }
-    const rerender = () => render(projectId, reports, view, selectedId, loading, running, selectedRunId);
-    const branches = [...new Set(reports.map((r) => r.branch ?? NO_BRANCH))];
-    const types = [...new Set(reports.map((r) => r.type))];
+    const rerender = () => render(projectId, reports, view, selectedId, loading, running, selectedRunId, page);
+    const branches = page.branches;
+    const types = page.types;
     // A filter whose last report is gone would hide everything while its control reads "All".
     if (!loading && !branches.includes(filter.branch)) filter.branch = '';
     if (!loading && !types.includes(filter.type)) filter.type = '';
     bar.append(seg, filterControl(branches, types, rerender));
     const body = document.createElement('div');
     body.className = 'middle-body';
-    const shown = filterReports(reports, { branch: filter.branch, type: filter.type });
+    const shown = reports;
     const working = running.filter((r) => (!filter.branch || (r.branch ?? NO_BRANCH) === filter.branch) && (!filter.type || r.type === filter.type));
     if (projectId && !loading && working.length) {
       const group = document.createElement('div');
@@ -192,7 +212,17 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
         body.append(sec);
       }
     }
+    if (projectId && !loading && page.hasMore) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'load-more';
+      more.textContent = page.loadingMore ? 'Loading more…' : 'Load more reports';
+      more.disabled = page.loadingMore;
+      more.onclick = h.loadMore;
+      body.append(more);
+    }
     container.append(bar, body);
+    container.scrollTop = scrollTop;
   }
 
   // A funnel button that shows how many filters are on; the branch and type choices open in a popover.
@@ -233,8 +263,8 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
       return label;
     };
     pop.append(
-      field('Branch', select('Branch', branches, filter.branch, 'All branches', (v) => v, (v) => (filter.branch = v), rerender)),
-      field('Type', select('Type', types, filter.type, 'All types', typeLabel, (v) => (filter.type = v), rerender)),
+      field('Branch', select('Branch', branches, filter.branch, 'All branches', (v) => v, (v) => (filter.branch = v), h.filterChanged)),
+      field('Type', select('Type', types, filter.type, 'All types', typeLabel, (v) => (filter.type = v), h.filterChanged)),
     );
     if (active) {
       const clear = document.createElement('button');
@@ -244,7 +274,7 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
       clear.onclick = () => {
         filter.branch = '';
         filter.type = '';
-        rerender();
+        h.filterChanged();
         container.querySelector<HTMLElement>('.filter-pop select')?.focus();
       };
       pop.append(clear);
@@ -254,8 +284,18 @@ export function createMiddle(container: HTMLElement, h: MiddleHandlers) {
   }
 
   function redraw() {
-    if (last) render(last.projectId, last.reports, last.view, last.selectedId, last.loading, last.running, last.selectedRunId);
+    if (last) render(last.projectId, last.reports, last.view, last.selectedId, last.loading, last.running, last.selectedRunId, last.page);
   }
 
-  return { render, rerender: () => last && render(last.projectId, last.reports, last.view, last.selectedId, last.loading, last.running, last.selectedRunId) };
+  return {
+    render,
+    filters: () => ({...filter}),
+    syncFilters: (branches: string[], types: string[]) => {
+      let changed = false;
+      if (filter.branch && !branches.includes(filter.branch)) { filter.branch = ''; changed = true; }
+      if (filter.type && !types.includes(filter.type)) { filter.type = ''; changed = true; }
+      return changed;
+    },
+    rerender: redraw,
+  };
 }

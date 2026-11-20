@@ -23,6 +23,11 @@ let sessionToken = 0;
 let view: View = 'list';
 let projects: ProjectSummary[] = [];
 let reports: ReportMeta[] = [];
+const REPORT_PAGE_SIZE = 30;
+let reportPage = {branches: [] as string[], types: [] as string[], hasMore: false, loadingMore: false};
+let reportedRuns = new Set<string>();
+let reportsByRun: Record<string, string> = {};
+let selectedReportRun: string | null = null;
 let running: RunningItem[] = [];
 let stopped: RunningItem[] = [];
 let loadingReports = false;
@@ -46,7 +51,7 @@ const pane = createReportPane($('report'), api, (id) => {
   reports = reports.map((r) => (r.id === id ? { ...r, chosen: true } : r));
   drawMiddle();
   run('Could not refresh the reports', refreshReports);
-});
+}, (id) => run('Could not open the report version', () => selectReport(id)));
 const tabs = createTabs($('tabs'), {
   reportHost: $('report'),
   screen: (s, interactive) => s.kind === 'ios-simulator' ? createIosScreen(s, interactive) : createScreen(s, interactive),
@@ -72,13 +77,20 @@ const middle = createMiddle($('middle'), {
   remove: (id) => run('Could not delete the report', () => removeReport(id)),
   removeRunning: (id) => run('Could not remove the item', () => removeRunning(id)),
   removeStopped: (id) => run('Could not delete the task history', () => removeStopped(id)),
+  filterChanged: () => {
+    reports = [];
+    loadingReports = true;
+    drawMiddle();
+    run('Could not filter the reports', refreshReports);
+  },
+  loadMore: () => run('Could not load more reports', loadMoreReports),
 });
 
 function drawProjects() {
   projectsView.render(projects, projectId);
 }
 function drawMiddle() {
-  middle.render(projectId, reports, view, reportId, loadingReports, [...running, ...stopped], runId);
+  middle.render(projectId, reports, view, reportId, loadingReports, [...running, ...stopped], runId, reportPage);
 }
 function taskContext() {
   if (runId) {
@@ -87,7 +99,7 @@ function taskContext() {
   }
   if (reportId) {
     const meta = reports.find((r) => r.id === reportId);
-    return { key: meta?.run || 'report:' + reportId, running: false };
+    return { key: meta?.run || selectedReportRun || 'report:' + reportId, running: false };
   }
   return null;
 }
@@ -126,9 +138,24 @@ async function refreshReports() {
   const pid = projectId;
   const mine = ++listToken;
   try {
-    const [list, working, stored] = pid ? await Promise.all([api.listReports(pid), api.listRunning(pid), api.listAllSessions(pid)]) : [[], [], []];
+    const filters = middle.filters();
+    const loadedCount = Math.max(REPORT_PAGE_SIZE, reports.length);
+    const [firstPage, working, stored] = pid ? await Promise.all([
+      api.listReportsPage(pid, 0, loadedCount, filters.branch, filters.type),
+      api.listRunning(pid), api.listAllSessions(pid),
+    ]) : [null, [], []];
     if (mine !== listToken) return;
+    let page = firstPage;
+    if (pid && page && middle.syncFilters(page.branches, page.types)) {
+      const current = middle.filters();
+      page = await api.listReportsPage(pid, 0, loadedCount, current.branch, current.type);
+      if (mine !== listToken) return;
+    }
+    const list = page?.reports ?? [];
     reports = list;
+    reportPage = {branches: page?.branches ?? [], types: page?.types ?? [], hasMore: page?.hasMore ?? false, loadingMore: false};
+    reportsByRun = page?.reportsByRun ?? {};
+    reportedRuns = new Set(Object.keys(reportsByRun));
     running = working;
     if (!reportId && !runId && working.length) runId = working[0].id;
     if (runId) {
@@ -136,7 +163,6 @@ async function refreshReports() {
       if (selected) pane.showDraft(selected);
     }
     const activeRuns = new Set(working.map((r) => r.id));
-    const reportedRuns = new Set(list.map((r) => r.run).filter(Boolean));
     const groups = new Map<string, SessionItem[]>();
     for (const session of stored) {
       if (activeRuns.has(session.run) || reportedRuns.has(session.run)) continue;
@@ -149,11 +175,11 @@ async function refreshReports() {
       branch: null, worktree: '', agent: 'unknown', startedAt: group[0].startedAt, ended: true,
     }));
     if (runId && !working.some((r) => r.id === runId)) {
-      const published = list.find((r) => r.run === runId);
-      if (published) {
+      const publishedId = list.find((r) => r.run === runId)?.id ?? reportsByRun[runId];
+      if (publishedId) {
         runId = null;
-        reportId = published.id;
-        void selectReport(published.id).catch((e) => showError('Could not open the report', e));
+        reportId = publishedId;
+        void selectReport(publishedId).catch((e) => showError('Could not open the report', e));
       } else if (!stopped.some((r) => r.id === runId)) {
         runId = null;
         pane.clear();
@@ -170,6 +196,27 @@ async function refreshReports() {
   }
 }
 
+async function loadMoreReports() {
+  const pid = projectId;
+  if (!pid || loadingReports || reportPage.loadingMore || !reportPage.hasMore) return;
+  const mine = listToken;
+  const filters = middle.filters();
+  reportPage = {...reportPage, loadingMore: true};
+  drawMiddle();
+  try {
+    const page = await api.listReportsPage(pid, reports.length, REPORT_PAGE_SIZE, filters.branch, filters.type);
+    if (mine !== listToken || pid !== projectId) return;
+    const seen = new Set(reports.map((r) => r.id));
+    reports = [...reports, ...page.reports.filter((r) => !seen.has(r.id))];
+    reportPage = {...reportPage, hasMore: page.hasMore, branches: page.branches, types: page.types};
+  } finally {
+    if (mine === listToken) {
+      reportPage = {...reportPage, loadingMore: false};
+      drawMiddle();
+    }
+  }
+}
+
 // Switch the selected project at once: the old project's list and report go away before anything loads.
 function setProject(id: string | null) {
   if (id === projectId) return;
@@ -179,6 +226,10 @@ function setProject(id: string | null) {
   sessions = [];
   ++sessionToken;
   reports = [];
+  reportPage = {branches: [], types: [], hasMore: false, loadingMore: false};
+  reportedRuns = new Set();
+  reportsByRun = {};
+  selectedReportRun = null;
   running = [];
   stopped = [];
   loadingReports = id !== null;
@@ -213,6 +264,8 @@ async function selectReport(id: string) {
   if (!pid) return;
   reportId = id;
   runId = null;
+  selectedReportRun = reports.find((r) => r.id === id)?.run ?? (await api.getReport(pid, id)).meta.run ?? null;
+  if (pid !== projectId || reportId !== id) return;
   drawMiddle();
   await refreshSessions();
   // Mark read only when this report was actually shown and is still the selection.
@@ -224,7 +277,11 @@ async function selectReport(id: string) {
     return;
   }
   if (pid === projectId) {
-    reports = reports.map((r) => (r.id === id ? { ...r, read: true } : r));
+    reports = reports.map((r) => {
+      if (!r.versions?.some((version) => version.id === id)) return r;
+      const versions = r.versions.map((version) => version.id === id ? {...version, read: true} : version);
+      return {...r, versions, read: versions.every((version) => version.read)};
+    });
     drawMiddle();
   }
   await refreshProjects();

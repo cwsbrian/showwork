@@ -6,7 +6,7 @@ import { createPlanFeedback } from './planFeedback';
 
 let paneCount = 0;
 
-export function createReportPane(container: HTMLElement, api: ShowworkApi, onChosen: (reportId: string) => void = () => {}) {
+export function createReportPane(container: HTMLElement, api: ShowworkApi, onChosen: (reportId: string) => void = () => {}, onVersion: (reportId: string) => void = () => {}) {
   const prefix = `pane${paneCount++}-`;
   let current: { destroy(): void; refresh(): void } | null = null;
   let commentView: { destroy(): void } | null = null;
@@ -202,6 +202,8 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
         return false;
       }
       if (mine !== token) return false;
+      const versions = await api.listReportVersions(projectId, reportId).catch(() => []);
+      if (mine !== token) return false;
       current?.destroy();
       commentView?.destroy();
       commentView = null;
@@ -211,7 +213,29 @@ export function createReportPane(container: HTMLElement, api: ShowworkApi, onCho
       const head = header(detail.meta);
       const body = document.createElement('div');
       body.className = 'report-body';
-      container.append(head, body);
+      container.append(head);
+      if (versions.length > 1) {
+        const nav = document.createElement('nav');
+        nav.className = 'report-versions';
+        nav.setAttribute('aria-label', 'Report versions');
+        const totals = new Map<string, number>();
+        const seen = new Map<string, number>();
+        versions.forEach((version) => totals.set(version.reportType, (totals.get(version.reportType) ?? 0) + 1));
+        for (const version of versions) {
+          const ordinal = (seen.get(version.reportType) ?? 0) + 1;
+          seen.set(version.reportType, ordinal);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = typeLabel(version.reportType) + ((totals.get(version.reportType) ?? 0) > 1 ? ` ${ordinal}` : '');
+          button.title = `${version.title} · ${new Date(version.createdAt).toLocaleString()}`;
+          button.dataset.reportId = version.id;
+          if (version.id === reportId) button.setAttribute('aria-current', 'page');
+          button.onclick = () => onVersion(version.id);
+          nav.append(button);
+        }
+        container.append(nav);
+      }
+      container.append(body);
       if (detail.meta.agentSession) {
         const badge = head.querySelector<HTMLElement>('.agent-session-status');
         let checking = false;

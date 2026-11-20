@@ -231,7 +231,7 @@ mod tests {
             title: "Login plan".into(), branch: None, commit: None, worktree: "/w".into(),
             agent: "codex".into(), created_at: "now".into(), version: "v1".into(), run: None,
             agent_session: Some(AgentSession { terminal_handle: "term_1".into(), terminal_incarnation: "i1".into(), worktree_id: "w1".into(), thread_id: None }),
-            open: false, chosen: false, read: false,
+            open: false, chosen: false, read: false, task_id: None, versions: None,
         };
         let comments = vec![ReportComment { id: "c1".into(), version: "v1".into(),
             anchor: CommentAnchor { target: "summary".into(), start: 0, end: 5, quote: "Login".into() },
