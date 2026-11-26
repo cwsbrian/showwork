@@ -1,10 +1,18 @@
 // UI check with the mock API only: SHOWWORK_CHROMIUM=... NODE_PATH=/path/to/node_modules node tests/ui.cjs
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const {spawn} = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const {spawn, execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 
 const appDir = path.resolve(__dirname, '..');
+const diagramDir = fs.mkdtempSync(path.join(os.tmpdir(), 'showwork-diagram-'));
+fs.copyFileSync(path.resolve(appDir, '../skills/showwork/vendor/diagram-design/assets/example-flowchart.html'), path.join(diagramDir, 'flow.html'));
+const diagramHtml = execFileSync('python3', ['-c',
+  'from pathlib import Path; import sys; sys.path.insert(0,sys.argv[1]); from diagram_design import embed; print(embed("flow.html",Path(sys.argv[2])/"report.json"))',
+  path.resolve(appDir, '../skills/showwork/scripts'), diagramDir], {encoding: 'utf8'});
+fs.rmSync(diagramDir, {recursive: true, force: true});
 const PORT = 5179;
 const URL_BASE = `http://localhost:${PORT}/`;
 const vite = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {cwd: appDir, stdio: ['ignore', 'pipe', 'pipe']});
@@ -94,6 +102,35 @@ async function waitServer() {
   const footer = await autoPanel.boundingBox();
   assert.ok(footer && Math.abs(footer.y + footer.height - 800) < 2, 'update notice stays at the bottom left');
   await autoContext.close();
+  const diagramContext = await browser.newContext({viewport: {width: 1050, height: 800}});
+  await diagramContext.addInitScript(f => { window.__SHOWWORK_FIXTURE__ = f; }, {...fixture,
+    reports: {...fixture.reports, a: [meta('diagram-result', 'result', 'main', '2026-02-01T00:00:00Z')]},
+    pages: {...fixture.pages, 'diagram-result': {...handoff('Diagram result', false), sections: [
+      {kind: 'explanation', title: 'Request flow', body: 'Diagram Design visual', html: diagramHtml},
+    ]}},
+  });
+  const diagramPage = await diagramContext.newPage();
+  await diagramPage.goto(URL_BASE);
+  await diagramPage.locator('.item[data-report-id="diagram-result"]').click();
+  const diagramFrame = diagramPage.frameLocator('#report .section-grid iframe');
+  await diagramFrame.locator('svg[role="img"] title').waitFor({state: 'attached'});
+  assert.equal(await diagramFrame.locator('svg title').textContent(), 'Should you write this as a skill?');
+  assert.ok(await diagramFrame.locator('.diagram-container').evaluate(el => el.scrollWidth > el.clientWidth), 'diagram scrolls locally at report width');
+  assert.ok(await diagramFrame.locator('.showwork-diagram-hint').isVisible());
+  assert.equal(await diagramFrame.locator('link[href*="fonts.googleapis.com"]').count(), 0);
+  if (process.env.SHOWWORK_DIAGRAM_SHOT) await diagramPage.screenshot({path: process.env.SHOWWORK_DIAGRAM_SHOT});
+  await diagramFrame.locator('svg text').first().evaluate(el => {
+    const doc = el.ownerDocument;
+    const selection = doc.getSelection();
+    const range = doc.createRange();
+    range.setStart(el.firstChild, 0);
+    range.setEnd(el.firstChild, el.firstChild.textContent.length);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    doc.dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+  });
+  await diagramPage.getByRole('dialog', {name: 'Add report comment'}).waitFor();
+  await diagramContext.close();
   const many = Array.from({length: 65}, (_, index) => meta(
     `bulk-${String(index).padStart(2, '0')}`, 'result', index === 0 ? 'archive' : 'main',
     new Date(Date.UTC(2026, 0, 1 + index)).toISOString(),
@@ -676,4 +713,13 @@ async function waitServer() {
   const outside = requested.filter(u => !/^(http:\/\/localhost[:/]|data:|blob:|about:)/.test(u));
   assert.deepEqual(outside, []);
   console.log('ui ok');
-})().then(async () => { await browser?.close(); stop(); }).catch(async e => { console.error(e); await browser?.close(); stop(); process.exit(1); });
+})().then(async () => {
+  stop();
+  await Promise.race([browser?.close(), new Promise(resolve => setTimeout(resolve, 1500))]);
+  process.exit(0);
+}).catch(async e => {
+  console.error(e);
+  stop();
+  await Promise.race([browser?.close(), new Promise(resolve => setTimeout(resolve, 1500))]);
+  process.exit(1);
+});

@@ -1,0 +1,2 @@
+# Preserve upstream Diagram Design files verbatim, including intentional Markdown breaks and CRLF examples.
+skills/showwork/vendor/diagram-design/** -whitespace

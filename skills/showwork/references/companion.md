@@ -145,12 +145,12 @@ It prints `{"report": id, "version": ..., "note": ..., "comments": [...]}`. The 
 
 Use `mode: "handoff"`, `title`, `summary`, `sections`, `checks` (optional for `plan` and `review` reports), and optionally `files` (see **Files worth reviewing** below). It has no options or approval control.
 
-Each section requires `title`, `body`, one visual (`html` or `image`), and `kind`:
+Each section requires `title`, `body`, one visual (`html`, `image`, or a Diagram Design `diagram` file), and `kind`:
 - `observed`: an actual captured result, with provenance and what it demonstrates.
 - `explanation`: an explanatory flow, architecture diagram, before/after account, or annotated code example.
 - `proposal`: a proposed follow-up, explicitly not implemented.
 
-Use inline SVG/HTML for diagrams, or `image` for an existing PNG/JPEG/WebP/GIF path relative to the JSON source. HTML renders in a sandboxed frame without scripts or external network resources. It is a visual aid, not a full running-app embed. Capture the real app separately when validating interactions. Never label a recreated mockup as an observed screenshot.
+Use `diagram` for a standalone Diagram Design HTML file beside the JSON source, inline SVG/HTML for other small visuals, or `image` for an existing PNG/JPEG/WebP/GIF path relative to the JSON source. HTML renders in a sandboxed frame without scripts or external network resources. It is a visual aid, not a full running-app embed. Capture the real app separately when validating interactions. Never label a recreated mockup as an observed screenshot.
 
 Image sections keep a compact preview and an accessible original-image link that opens a new tab. Use browser-native image zoom to read tall captures; verify the original loads through the companion's authenticated asset route. Decision option images remain selection targets.
 
@@ -188,7 +188,7 @@ Put a few **relevant code excerpts directly below the explanation they support**
 
 Start with the finished behavior and a concrete before/after example, then the relevant diagrams, important files, checks and remaining problems. Do not lead with a timeline of the agent's work. Explain **what changed, why, how it behaves, and what evidence supports it**. Keep each section's opening short so the diagram is visible first; put long traces, detailed source locations and contracts in supporting tables or expandable details below it. Where no baseline is available, say so rather than inventing a before state. For each important behavior, connect the actual command/request, observed result, and relevant limitation. Test counts alone are insufficient. Do not expose credentials or private payloads.
 
-The companion renders static inline HTML/SVG: draw diagrams with labeled nodes/arrows and render tables with `<table>`, `<thead>`, and `<th>`. Do not paste raw Mermaid expecting it to render, or load external scripts. Use native `<details><summary>` for optional long command output or SQL; keep important findings and risks visible. Wrap wide tables in an overflow container for small screens. Handoff sections use the full page width and expand with their content; section links help navigate a long explanation.
+The companion renders static inline HTML/SVG. For a connected diagram, use the bundled [Diagram Design workflow](diagram-design.md) and pass its standalone HTML through the `diagram` field; the publisher adapts it for the app. Use tables for plain comparisons. Do not paste raw Mermaid expecting it to render, or load external scripts. Use native `<details><summary>` for optional long command output or SQL; keep important findings and risks visible. Wrap wide tables in an overflow container for small screens. Handoff sections use the full page width and expand with their content; section links help navigate a long explanation.
 
 ### Draw connections, not a paragraph disguised as boxes
 

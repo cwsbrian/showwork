@@ -24,6 +24,7 @@ from runtime import workspace
 import store
 import browser
 import ios_simulator
+import diagram_design
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 TEMPLATE = ASSETS / "companion.html"
@@ -161,9 +162,10 @@ def validate(page, report_type="result"):
             raise ValueError("Each section/option must be an object")
         require_text(item.get("title"), "section/option title")
         require_text(item.get("body"), "section/option body")
-        if not item.get("html") and not item.get("image"):
-            raise ValueError("Each section/option needs a rendered HTML visual or image")
-        for key in ["html", "image"]:
+        visuals = [key for key in ("html", "image", "diagram") if key in item]
+        if len(visuals) != 1:
+            raise ValueError("Each section/option needs exactly one HTML, image, or Diagram Design visual")
+        for key in visuals:
             if key in item:
                 require_text(item[key], key)
         if item in sections and item.get("kind") not in {"proposal", "observed", "explanation"}:
@@ -251,6 +253,8 @@ def publish(project, source, report_type=None, agent=None, task_id=None):
     # Validate all attachments before saving anything.
     images = []
     for item in page.get("sections", []) + page.get("options", []):
+        if "diagram" in item:
+            item["html"] = diagram_design.embed(item.pop("diagram"), source)
         if "image" not in item:
             continue
         image = (source.parent / item["image"]).resolve()

@@ -111,6 +111,8 @@ Reports are kept in the Showwork app folder (`~/Library/Application Support/Show
 
 The companion tool lives inside the `showwork` skill and is copied with both user and project installations. It uses only the Python standard library and updates the report automatically. See the [companion guide](skills/showwork/references/companion.md) for usage and page format. Choices are recorded and sent to the original session when that session is connected; otherwise they remain saved for later review.
 
+For connected diagrams, Showwork includes the MIT-licensed [Diagram Design](https://github.com/cathrynlavery/diagram-design) skill. The agent creates a static HTML/SVG diagram in the temporary report folder, checks its geometry, and the companion embeds it in the app through a `diagram` visual. See the [integration guide](skills/showwork/references/diagram-design.md). No separate Diagram Design installation is needed.
+
 Web captures run in a browser session shown as a live tab in the Showwork app; see [capture web pages in the app](skills/showwork/references/companion.md#capture-web-pages-in-the-app).
 
 ## Record verification evidence

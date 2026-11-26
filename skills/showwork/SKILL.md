@@ -29,6 +29,7 @@ Read the [browser companion guide](references/companion.md) and publish a handof
 
 - **UI:** show actual resulting screens and important interactions when tools permit, with capture provenance. Label explanatory mockups separately.
   For web captures, use the [in-app browser](references/companion.md#capture-web-pages-in-the-app).
+- **Connected diagrams:** use the bundled [Diagram Design workflow](references/diagram-design.md) when a diagram makes the change clearer than prose or a table.
 - **Routing:** show a connected flow/sequence diagram with actual branches, conditions and responses. Put route tables and source traces below it.
 - **Schema/migrations:** show a before/after ERD with affected tables, PK/FK fields, relationships and cardinalities from source. Explain migration/rollback state and data-loss risks; distinguish authored migrations from executed ones.
 - **Architecture:** show component boundaries and data flow that help explain the changed behavior.

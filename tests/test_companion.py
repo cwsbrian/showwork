@@ -187,6 +187,34 @@ class CompanionTest(unittest.TestCase):
                 self.get(path)
             self.assertEqual(failure.exception.code, 404)
 
+    def test_diagram_design_html_is_embedded_as_static_selectable_svg(self):
+        example = ROOT / "skills/showwork/vendor/diagram-design/assets/example-flowchart.html"
+        shutil.copy2(example, self.project / "flow.html")
+        page = copy.deepcopy(HANDOFF)
+        page["sections"][0].pop("html")
+        page["sections"][0]["diagram"] = "flow.html"
+        published = self.publish(page)
+        visual = published["sections"][0]
+        self.assertNotIn("diagram", visual)
+        self.assertIn('<svg', visual["html"])
+        self.assertIn('role="img"', visual["html"])
+        self.assertIn('class="diagram-container"', visual["html"])
+        self.assertNotIn("fonts.googleapis.com", visual["html"])
+        with self.get("/api/view") as response:
+            shown = json.load(response)["page"]["sections"][0]["html"]
+        self.assertIn("Should you write this as a skill?", shown)
+
+    def test_diagram_design_rejects_scripts_and_files_outside_report_directory(self):
+        page = copy.deepcopy(HANDOFF)
+        page["sections"][0].pop("html")
+        page["sections"][0]["diagram"] = "../flow.html"
+        with self.assertRaisesRegex(ValueError, "temporary directory"):
+            self.publish(page)
+        (self.project / "flow.html").write_text('<style>svg{width:100%}</style><svg role="img"><title>Flow</title></svg><script>alert(1)</script>')
+        page["sections"][0]["diagram"] = "flow.html"
+        with self.assertRaisesRegex(ValueError, "static"):
+            self.publish(page)
+
     def test_invalid_publish_preserves_current_page(self):
         first = self.publish(DECISION)
         invalid = copy.deepcopy(HANDOFF)

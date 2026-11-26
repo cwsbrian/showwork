@@ -17,7 +17,8 @@
     "skills/*/scripts/*.py",
     "skills/*/assets/*.html",
     "skills/*/assets/*.js",
-    "skills/*/assets/*.css"
+    "skills/*/assets/*.css",
+    "skills/showwork/vendor/diagram-design/**"
   ],
   "scripts": { "test": "node --test tests/install_cli.cjs" }
 }
